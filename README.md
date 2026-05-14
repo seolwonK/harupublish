@@ -4,6 +4,54 @@ Java Spring Boot 기반 Haru 백엔드 API 서버입니다.
 
 현재 구현 범위는 JWT 인증, 사용자 프로필, 튜터 전환, 튜터 프로필 승인 흐름, Experts 공개 목록 조회입니다.
 
+## Current Status
+
+현재까지 구현 및 검증된 범위입니다.
+
+- JWT 기반 회원가입, 로그인, 로그아웃, refresh token 회전
+- refresh token 재사용 차단
+- 마지막 로그인 시각 기록
+- 사용자 프로필 조회 및 수정
+- `roles`, `activeRole`, `tutorProfileStatus` 분리
+- 튜터 전환 시 `TUTOR` role 부여 및 `activeRole = TUTOR` 전환
+- 튜터 프로필 DRAFT/PENDING/APPROVED/REJECTED 상태 흐름
+- 관리자 승인 전 Experts 목록 미노출
+- 관리자 승인 후 Experts 목록 노출
+- 승인된 튜터 프로필 수정 시 DRAFT 복귀 및 재승인 요구
+- Swagger API 설명 추가
+- 브라우저 API Test Console 추가
+
+## Verification
+
+마지막 검증 결과:
+
+```text
+.\gradlew.bat build
+BUILD SUCCESSFUL
+```
+
+검증한 주요 시나리오:
+
+- 회원가입, 로그인, 로그아웃
+- access token 인증
+- refresh token 회전 및 재사용 차단
+- 사용자 프로필 수정
+- 튜터 전환, 프로필 임시저장, 승인요청 제출
+- 관리자 승인/반려
+- 승인 전 Experts 미노출
+- 승인 후 Experts 노출
+- 잘못된 요청, 인증 없음, 권한 없음, 없는 리소스 처리
+
+## Screenshots
+
+API Test Console:
+
+![API Test Console](docs/images/test-console.png)
+
+Swagger UI:
+
+![Swagger UI](docs/images/swagger-ui.png)
+
 ## Tech Stack
 
 - Java 21
