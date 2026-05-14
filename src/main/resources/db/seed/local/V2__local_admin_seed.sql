@@ -11,9 +11,9 @@ INSERT INTO users (
     updated_at
 ) VALUES (
     1,
-    'admin@haru.local',
-    '$2a$10$7EqJtq98hPqEX7fNZaFWoOhiJg7D/Cl4u49Ua5bJEy0as/SIB0NUu',
-    'Haru Admin',
+    'admin',
+    '$2a$10$XoLBCcQF/yinFfalwUJ7H.9MZSQSnDws1wbbkXp2fiiSS/gvRfTla',
+    'Admin',
     NULL,
     'Asia/Seoul',
     'ADMIN',

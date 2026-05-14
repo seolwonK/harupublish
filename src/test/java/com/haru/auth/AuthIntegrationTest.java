@@ -8,6 +8,7 @@ import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMock
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -32,6 +33,9 @@ class AuthIntegrationTest {
 
     @Autowired
     JdbcTemplate jdbcTemplate;
+
+    @Autowired
+    PasswordEncoder passwordEncoder;
 
     @Test
     void signupLoginMeRefreshLogoutFlow() throws Exception {
@@ -182,6 +186,38 @@ class AuthIntegrationTest {
                                 """))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.error.code").value("INVALID_CREDENTIALS"));
+    }
+
+    @Test
+    void adminIdCanLoginWithoutEmailFormat() throws Exception {
+        jdbcTemplate.update("""
+                INSERT INTO users (
+                    email,
+                    password_hash,
+                    name,
+                    mobile_number,
+                    time_zone,
+                    active_role,
+                    account_status,
+                    created_at,
+                    updated_at
+                ) VALUES (?, ?, ?, NULL, ?, 'ADMIN', 'ACTIVE', CURRENT_TIMESTAMP(6), CURRENT_TIMESTAMP(6))
+                """, "admin-test", passwordEncoder.encode("admin1234"), "Admin", "Asia/Seoul");
+        jdbcTemplate.update("INSERT INTO user_roles (user_id, role) SELECT id, 'STUDENT' FROM users WHERE email = ?", "admin-test");
+        jdbcTemplate.update("INSERT INTO user_roles (user_id, role) SELECT id, 'ADMIN' FROM users WHERE email = ?", "admin-test");
+
+        mockMvc.perform(post("/api/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "email": "admin-test",
+                                  "password": "admin1234"
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.user.email").value("admin-test"))
+                .andExpect(jsonPath("$.data.user.activeRole").value("ADMIN"))
+                .andExpect(jsonPath("$.data.user.roles", containsInAnyOrder("STUDENT", "ADMIN")));
     }
 
     private AuthTokens signup(String email, String password, String name) throws Exception {

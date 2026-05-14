@@ -59,6 +59,14 @@ Swagger UI:
 http://localhost:8080/swagger-ui.html
 ```
 
+API Test Console:
+
+```text
+http://localhost:8080/test-ui.html
+```
+
+브라우저에서 회원가입, 로그인, refresh, 사용자 프로필 수정, 튜터 전환, 튜터 프로필 제출, 관리자 승인/반려, Experts 노출 여부를 직접 테스트할 수 있습니다.
+
 OpenAPI JSON:
 
 ```text

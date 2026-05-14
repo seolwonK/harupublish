@@ -1,0 +1,1175 @@
+<!doctype html>
+<html lang="ko">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Haru API Test Console</title>
+    <style>
+        :root {
+            --bg: #f6f7f9;
+            --panel: #ffffff;
+            --text: #20242c;
+            --muted: #69717f;
+            --line: #d9dde5;
+            --accent: #166f68;
+            --accent-dark: #0f5a55;
+            --danger: #b42318;
+            --warn: #a15c07;
+            --ok: #14743f;
+            --code: #111827;
+            --code-bg: #f0f2f5;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            background: var(--bg);
+            color: var(--text);
+            font-family: Arial, "Malgun Gothic", sans-serif;
+            font-size: 14px;
+            line-height: 1.45;
+        }
+
+        header {
+            position: sticky;
+            top: 0;
+            z-index: 10;
+            background: #ffffff;
+            border-bottom: 1px solid var(--line);
+        }
+
+        .topbar {
+            display: grid;
+            grid-template-columns: 1fr auto;
+            gap: 16px;
+            align-items: center;
+            max-width: 1440px;
+            margin: 0 auto;
+            padding: 14px 20px;
+        }
+
+        h1 {
+            margin: 0;
+            font-size: 20px;
+            font-weight: 700;
+        }
+
+        .status-line {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            justify-content: flex-end;
+        }
+
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            min-height: 28px;
+            padding: 4px 9px;
+            border: 1px solid var(--line);
+            border-radius: 6px;
+            background: #fff;
+            color: var(--muted);
+            white-space: nowrap;
+        }
+
+        .badge.ok {
+            color: var(--ok);
+            border-color: #b8dac8;
+            background: #f1fbf5;
+        }
+
+        .badge.warn {
+            color: var(--warn);
+            border-color: #efd0a3;
+            background: #fff8ed;
+        }
+
+        main {
+            display: grid;
+            grid-template-columns: 280px minmax(0, 1fr) 420px;
+            gap: 16px;
+            max-width: 1440px;
+            margin: 0 auto;
+            padding: 16px 20px 28px;
+        }
+
+        nav {
+            position: sticky;
+            top: 74px;
+            align-self: start;
+            background: var(--panel);
+            border: 1px solid var(--line);
+            border-radius: 8px;
+            padding: 10px;
+        }
+
+        nav button {
+            width: 100%;
+            justify-content: flex-start;
+            margin: 2px 0;
+            background: transparent;
+            color: var(--text);
+            border-color: transparent;
+        }
+
+        nav button.active {
+            background: #e8f3f1;
+            color: var(--accent-dark);
+            border-color: #b9d8d3;
+        }
+
+        .content {
+            min-width: 0;
+        }
+
+        section {
+            display: none;
+            background: var(--panel);
+            border: 1px solid var(--line);
+            border-radius: 8px;
+            padding: 16px;
+            margin-bottom: 16px;
+        }
+
+        section.active {
+            display: block;
+        }
+
+        .section-head {
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            align-items: flex-start;
+            border-bottom: 1px solid var(--line);
+            padding-bottom: 12px;
+            margin-bottom: 14px;
+        }
+
+        h2 {
+            margin: 0;
+            font-size: 18px;
+        }
+
+        h3 {
+            margin: 18px 0 8px;
+            font-size: 15px;
+        }
+
+        p {
+            margin: 6px 0;
+            color: var(--muted);
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 12px;
+        }
+
+        .grid.three {
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+        }
+
+        label {
+            display: block;
+            margin-bottom: 4px;
+            color: var(--muted);
+            font-size: 12px;
+            font-weight: 700;
+        }
+
+        input,
+        textarea,
+        select {
+            width: 100%;
+            min-height: 38px;
+            border: 1px solid var(--line);
+            border-radius: 6px;
+            padding: 8px 10px;
+            background: #fff;
+            color: var(--text);
+            font: inherit;
+        }
+
+        textarea {
+            min-height: 82px;
+            resize: vertical;
+        }
+
+        .actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 12px;
+        }
+
+        button {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 36px;
+            border: 1px solid var(--accent);
+            border-radius: 6px;
+            padding: 7px 12px;
+            background: var(--accent);
+            color: #fff;
+            font: inherit;
+            font-weight: 700;
+            cursor: pointer;
+        }
+
+        button.secondary {
+            background: #fff;
+            color: var(--accent-dark);
+            border-color: #9cc8c2;
+        }
+
+        button.danger {
+            background: var(--danger);
+            border-color: var(--danger);
+        }
+
+        button:disabled {
+            cursor: not-allowed;
+            opacity: .55;
+        }
+
+        .split {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+            gap: 12px;
+        }
+
+        .field {
+            min-width: 0;
+        }
+
+        .panel {
+            border: 1px solid var(--line);
+            border-radius: 8px;
+            padding: 12px;
+            background: #fbfcfd;
+        }
+
+        .flow-note {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 10px;
+            margin: 12px 0;
+        }
+
+        .flow-step {
+            border: 1px solid var(--line);
+            border-radius: 8px;
+            background: #fbfcfd;
+            padding: 10px;
+        }
+
+        .flow-step strong {
+            display: block;
+            margin-bottom: 4px;
+        }
+
+        .test-only {
+            border-color: #efd0a3;
+            background: #fff8ed;
+        }
+
+        .log-panel {
+            position: sticky;
+            top: 74px;
+            align-self: start;
+            background: var(--panel);
+            border: 1px solid var(--line);
+            border-radius: 8px;
+            min-width: 0;
+            overflow: hidden;
+        }
+
+        .log-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px;
+            border-bottom: 1px solid var(--line);
+        }
+
+        .log-head h2 {
+            font-size: 16px;
+        }
+
+        pre {
+            margin: 0;
+            padding: 12px;
+            background: var(--code-bg);
+            color: var(--code);
+            overflow: auto;
+            white-space: pre-wrap;
+            word-break: break-word;
+            font-size: 12px;
+            max-height: 70vh;
+        }
+
+        .response {
+            min-height: 160px;
+        }
+
+        .token-box {
+            max-height: 120px;
+            overflow: auto;
+            word-break: break-all;
+            font-size: 12px;
+            color: var(--muted);
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+        }
+
+        th,
+        td {
+            border-bottom: 1px solid var(--line);
+            padding: 8px;
+            text-align: left;
+            vertical-align: top;
+        }
+
+        th {
+            color: var(--muted);
+            font-size: 12px;
+        }
+
+        .result-ok {
+            color: var(--ok);
+            font-weight: 700;
+        }
+
+        .result-fail {
+            color: var(--danger);
+            font-weight: 700;
+        }
+
+        @media (max-width: 1180px) {
+            main {
+                grid-template-columns: 220px minmax(0, 1fr);
+            }
+
+            .log-panel {
+                grid-column: 1 / -1;
+                position: static;
+            }
+        }
+
+        @media (max-width: 760px) {
+            .topbar {
+                grid-template-columns: 1fr;
+            }
+
+            .status-line {
+                justify-content: flex-start;
+            }
+
+            main {
+                grid-template-columns: 1fr;
+                padding: 12px;
+            }
+
+            nav {
+                position: static;
+                display: grid;
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+
+            .grid,
+            .grid.three,
+            .split,
+            .flow-note {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+<header>
+    <div class="topbar">
+        <div>
+            <h1>Haru API Test Console</h1>
+            <p>JWT 인증, 사용자, 튜터 전환, 관리자 승인, Experts 노출 흐름을 브라우저에서 테스트합니다.</p>
+        </div>
+        <div class="status-line">
+            <span id="apiBaseBadge" class="badge"></span>
+            <span id="userBadge" class="badge warn">사용자 미로그인</span>
+            <span id="adminBadge" class="badge warn">관리자 미로그인</span>
+        </div>
+    </div>
+</header>
+
+<main>
+    <nav id="nav"></nav>
+
+    <div class="content">
+        <section id="auth" class="active">
+            <div class="section-head">
+                <div>
+                    <h2>인증</h2>
+                    <p>회원가입, 로그인, refresh, logout, me API를 테스트합니다.</p>
+                </div>
+                <button class="secondary" data-action="clearUserSession">사용자 세션 초기화</button>
+            </div>
+
+            <div class="grid">
+                <div class="panel">
+                    <h3>사용자 회원가입</h3>
+                    <div class="field"><label>이메일</label><input id="signupEmail"></div>
+                    <div class="field"><label>비밀번호</label><input id="signupPassword" type="password" value="password123!"></div>
+                    <div class="field"><label>이름</label><input id="signupName" value="테스트 사용자"></div>
+                    <div class="field"><label>타임존</label><input id="signupTimeZone" value="Asia/Seoul"></div>
+                    <div class="actions">
+                        <button data-action="signup">회원가입</button>
+                        <button class="secondary" data-action="fillNewUser">새 이메일 생성</button>
+                    </div>
+                </div>
+
+                <div class="panel">
+                    <h3>사용자 로그인</h3>
+                    <div class="field"><label>이메일</label><input id="loginEmail"></div>
+                    <div class="field"><label>비밀번호</label><input id="loginPassword" type="password" value="password123!"></div>
+                    <div class="actions">
+                        <button data-action="login">로그인</button>
+                        <button class="secondary" data-action="authMe">GET /api/auth/me</button>
+                        <button class="secondary" data-action="refresh">토큰 refresh</button>
+                        <button class="danger" data-action="logout">로그아웃</button>
+                    </div>
+                </div>
+            </div>
+
+            <h3>사용자 토큰</h3>
+            <div class="split">
+                <div class="panel">
+                    <label>accessToken</label>
+                    <div id="userAccessToken" class="token-box">없음</div>
+                </div>
+                <div class="panel">
+                    <label>refreshToken</label>
+                    <div id="userRefreshToken" class="token-box">없음</div>
+                </div>
+            </div>
+        </section>
+
+        <section id="user">
+            <div class="section-head">
+                <div>
+                    <h2>사용자 프로필과 activeRole</h2>
+                    <p>내 정보 조회, 프로필 수정, 현재 모드 변경을 테스트합니다.</p>
+                </div>
+                <button class="secondary" data-action="usersMe">GET /api/users/me</button>
+            </div>
+
+            <div class="grid">
+                <div class="panel">
+                    <h3>프로필 수정</h3>
+                    <div class="field"><label>이름</label><input id="profileName" value="수정된 사용자"></div>
+                    <div class="field"><label>휴대폰 번호</label><input id="profileMobile" value="+82 10-0000-0000"></div>
+                    <div class="field"><label>타임존</label><input id="profileTimeZone" value="Asia/Seoul"></div>
+                    <div class="actions">
+                        <button data-action="updateUserProfile">프로필 저장</button>
+                        <button class="secondary" data-action="setInvalidTimeZone">잘못된 timezone 테스트</button>
+                    </div>
+                </div>
+
+                <div class="panel">
+                    <h3>현재 모드(activeRole)</h3>
+                    <p id="roleGuide">로그인 직후에는 STUDENT만 보유합니다. TUTOR 모드는 튜터 전환 후 선택할 수 있습니다.</p>
+                    <div class="field">
+                        <label>전환할 모드</label>
+                        <select id="activeRole">
+                            <option value="STUDENT">STUDENT</option>
+                            <option value="TUTOR">TUTOR</option>
+                            <option value="ADMIN">ADMIN</option>
+                            <option value="NOT_A_ROLE">NOT_A_ROLE</option>
+                        </select>
+                    </div>
+                    <div class="actions">
+                        <button data-action="changeActiveRole">현재 모드 변경</button>
+                        <button class="secondary" data-action="switchTutorAndStay">튜터 전환 먼저 실행</button>
+                    </div>
+                    <p>승인 여부는 activeRole이 아니라 tutorProfileStatus로 판단합니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <section id="tutor">
+            <div class="section-head">
+                <div>
+                    <h2>튜터 전환과 프로필</h2>
+                    <p>튜터 전환은 모드 진입, 프로필 저장은 임시저장, 승인요청은 관리자 심사 요청입니다.</p>
+                </div>
+                <div class="actions">
+                    <button data-action="switchTutor">1. 튜터 전환 시작</button>
+                    <button class="secondary" data-action="getTutorProfile">내 튜터 프로필 조회</button>
+                </div>
+            </div>
+
+            <div class="flow-note">
+                <div class="flow-step">
+                    <strong>1. 튜터 전환</strong>
+                    <span>roles에 TUTOR를 추가하고 activeRole을 TUTOR로 바꿉니다. 아직 판매 가능 상태는 아닙니다.</span>
+                </div>
+                <div class="flow-step">
+                    <strong>2. 프로필 임시저장</strong>
+                    <span>작성 내용을 DRAFT 상태로 저장합니다. 고객 Experts 목록에는 노출되지 않습니다.</span>
+                </div>
+                <div class="flow-step">
+                    <strong>3. 승인요청 제출</strong>
+                    <span>필수값이 채워지면 PENDING으로 바뀝니다. 관리자가 APPROVED 처리해야 노출됩니다.</span>
+                </div>
+            </div>
+
+            <div class="grid">
+                <div class="field"><label>표시 이름</label><input id="tutorDisplayName" value="Haru Korean Expert"></div>
+                <div class="field"><label>카테고리</label><input id="tutorCategory" value="KOREAN"></div>
+                <div class="field"><label>짧은 소개</label><input id="tutorShortIntro" value="실전 한국어 회화 수업"></div>
+                <div class="field"><label>가능 언어</label><input id="tutorLanguages" value="Korean, English"></div>
+                <div class="field"><label>수업 가격</label><input id="tutorPrice" type="number" value="25000"></div>
+                <div class="field"><label>가능 시간</label><input id="tutorAvailableTime" value="Weekday evenings KST"></div>
+                <div class="field"><label>지급 수단</label><input id="tutorPayment" value="BANK_TRANSFER"></div>
+                <div class="field"><label>프로필 이미지 URL</label><input id="tutorProfileImage" value="https://example.com/profile.jpg"></div>
+                <div class="field"><label>소개 영상 URL</label><input id="tutorIntroVideo" value="https://example.com/intro.mp4"></div>
+                <div class="field"><label>썸네일 URL</label><input id="tutorThumbnail" value="https://example.com/thumb.jpg"></div>
+                <div class="field"><label>자기소개</label><textarea id="tutorAbout">한국어 학습자가 자신 있게 말하도록 돕습니다.</textarea></div>
+                <div class="field"><label>제공 수업</label><textarea id="tutorOffer">회화, 발음, 면접 한국어를 제공합니다.</textarea></div>
+            </div>
+            <div class="actions">
+                <button data-action="saveTutorProfile">2. 프로필 임시저장</button>
+                <button data-action="submitTutorProfile">3. 승인요청 제출</button>
+            </div>
+
+            <div class="panel test-only">
+                <h3>실패 케이스 테스트</h3>
+                <p>필수값이 빠진 프로필은 저장은 될 수 있지만 승인요청 제출은 실패해야 합니다.</p>
+                <div class="actions">
+                    <button class="secondary" data-action="testIncompleteTutorSubmit">미완성 프로필 제출 실패 테스트</button>
+                </div>
+            </div>
+        </section>
+
+        <section id="admin">
+            <div class="section-head">
+                <div>
+                    <h2>관리자 승인</h2>
+                    <p>관리자 토큰으로 튜터 프로필 승인/반려를 테스트합니다.</p>
+                </div>
+                <button class="secondary" data-action="clearAdminSession">관리자 세션 초기화</button>
+            </div>
+
+            <div class="grid">
+                <div class="panel">
+                    <h3>관리자 로그인</h3>
+                    <div class="field"><label>이메일</label><input id="adminEmail" placeholder="관리자 이메일"></div>
+                    <div class="field"><label>비밀번호</label><input id="adminPassword" type="password" value="password123!"></div>
+                    <div class="actions">
+                        <button data-action="adminLogin">관리자 로그인</button>
+                        <button class="secondary" data-action="adminMe">관리자 me</button>
+                    </div>
+                </div>
+
+                <div class="panel">
+                    <h3>승인/반려 대상</h3>
+                    <div class="field"><label>tutorProfileId</label><input id="adminTutorProfileId" type="number" placeholder="예: 1"></div>
+                    <p id="adminApprovalStatus">아직 승인/반려 요청을 실행하지 않았습니다.</p>
+                    <div class="actions">
+                        <button data-action="approveTutor">승인</button>
+                        <button class="danger" data-action="rejectTutor">반려</button>
+                    </div>
+                    <p>튜터 전환 후 생성된 ID는 자동으로 이 입력에 채워집니다.</p>
+                </div>
+            </div>
+
+            <h3>관리자 토큰</h3>
+            <div class="panel token-box" id="adminAccessToken">없음</div>
+        </section>
+
+        <section id="experts">
+            <div class="section-head">
+                <div>
+                    <h2>Experts 공개 목록</h2>
+                    <p>`APPROVED` 튜터만 노출되는지 확인합니다.</p>
+                </div>
+                <button data-action="loadExperts">Experts 조회</button>
+            </div>
+            <div class="panel">
+                <table>
+                    <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>이름</th>
+                        <th>카테고리</th>
+                        <th>언어</th>
+                        <th>가격</th>
+                    </tr>
+                    </thead>
+                    <tbody id="expertsTable">
+                    <tr><td colspan="5">조회 결과가 없습니다.</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <section id="scenario">
+            <div class="section-head">
+                <div>
+                    <h2>전체 시나리오 실행</h2>
+                    <p>회원가입부터 튜터 전환, 제출, 승인 전 미노출까지 자동으로 실행합니다. 관리자 토큰이 있으면 승인/반려 흐름까지 실행합니다.</p>
+                </div>
+                <button data-action="runScenario">시나리오 실행</button>
+            </div>
+            <div class="panel">
+                <table>
+                    <thead>
+                    <tr>
+                        <th>단계</th>
+                        <th>결과</th>
+                        <th>상세</th>
+                    </tr>
+                    </thead>
+                    <tbody id="scenarioTable">
+                    <tr><td colspan="3">아직 실행하지 않았습니다.</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    </div>
+
+    <aside class="log-panel">
+        <div class="log-head">
+            <h2>요청/응답 로그</h2>
+            <button class="secondary" data-action="clearLog">지우기</button>
+        </div>
+        <pre id="log" class="response">대기 중</pre>
+    </aside>
+</main>
+
+<script>
+    const state = {
+        apiBase: window.location.origin,
+        user: {
+            accessToken: localStorage.getItem("haru.user.accessToken") || "",
+            refreshToken: localStorage.getItem("haru.user.refreshToken") || "",
+            me: null
+        },
+        admin: {
+            accessToken: localStorage.getItem("haru.admin.accessToken") || "",
+            refreshToken: localStorage.getItem("haru.admin.refreshToken") || "",
+            me: null
+        },
+        lastTutorProfileId: localStorage.getItem("haru.lastTutorProfileId") || ""
+    };
+
+    const sections = [
+        ["auth", "인증"],
+        ["user", "사용자"],
+        ["tutor", "튜터"],
+        ["admin", "관리자"],
+        ["experts", "Experts"],
+        ["scenario", "전체 시나리오"]
+    ];
+
+    function el(id) {
+        return document.getElementById(id);
+    }
+
+    function init() {
+        el("apiBaseBadge").textContent = state.apiBase;
+        el("adminTutorProfileId").value = state.lastTutorProfileId;
+        buildNav();
+        fillNewUser();
+        bindActions();
+        renderTokens();
+        refreshBadges();
+    }
+
+    function buildNav() {
+        const nav = el("nav");
+        nav.innerHTML = "";
+        sections.forEach(([id, label], index) => {
+            const button = document.createElement("button");
+            button.type = "button";
+            button.textContent = label;
+            button.className = index === 0 ? "active" : "";
+            button.addEventListener("click", () => activateSection(id));
+            nav.appendChild(button);
+        });
+    }
+
+    function activateSection(id) {
+        document.querySelectorAll("section").forEach(section => section.classList.toggle("active", section.id === id));
+        document.querySelectorAll("nav button").forEach((button, index) => {
+            button.classList.toggle("active", sections[index][0] === id);
+        });
+    }
+
+    function bindActions() {
+        document.querySelectorAll("[data-action]").forEach(button => {
+            button.addEventListener("click", () => actions[button.dataset.action]());
+        });
+    }
+
+    async function request(method, path, body, token) {
+        const headers = {Accept: "application/json"};
+        if (body !== undefined && body !== null) {
+            headers["Content-Type"] = "application/json";
+        }
+        if (token) {
+            headers.Authorization = `Bearer ${token}`;
+        }
+
+        const started = new Date();
+        const response = await fetch(`${state.apiBase}${path}`, {
+            method,
+            headers,
+            body: body === undefined || body === null ? undefined : JSON.stringify(body)
+        });
+        const text = await response.text();
+        let data = null;
+        try {
+            data = text ? JSON.parse(text) : null;
+        } catch (error) {
+            data = text;
+        }
+
+        writeLog({
+            time: started.toLocaleTimeString(),
+            request: {method, path, body: body || null},
+            status: response.status,
+            response: data
+        });
+
+        return {ok: response.ok, status: response.status, data};
+    }
+
+    function writeLog(value) {
+        el("log").textContent = JSON.stringify(value, null, 2);
+    }
+
+    function setUserTokens(data) {
+        state.user.accessToken = data.accessToken || "";
+        state.user.refreshToken = data.refreshToken || "";
+        state.user.me = data.user || state.user.me;
+        localStorage.setItem("haru.user.accessToken", state.user.accessToken);
+        localStorage.setItem("haru.user.refreshToken", state.user.refreshToken);
+        renderTokens();
+        refreshBadges();
+    }
+
+    function setAdminTokens(data) {
+        state.admin.accessToken = data.accessToken || "";
+        state.admin.refreshToken = data.refreshToken || "";
+        state.admin.me = data.user || state.admin.me;
+        localStorage.setItem("haru.admin.accessToken", state.admin.accessToken);
+        localStorage.setItem("haru.admin.refreshToken", state.admin.refreshToken);
+        renderTokens();
+        refreshBadges();
+    }
+
+    function renderTokens() {
+        el("userAccessToken").textContent = state.user.accessToken || "없음";
+        el("userRefreshToken").textContent = state.user.refreshToken || "없음";
+        el("adminAccessToken").textContent = state.admin.accessToken || "없음";
+    }
+
+    function refreshBadges() {
+        const userText = state.user.me
+            ? `${state.user.me.email} / ${state.user.me.activeRole} / ${state.user.me.tutorProfileStatus || "NO_TUTOR_PROFILE"}`
+            : state.user.accessToken ? "사용자 토큰 있음" : "사용자 미로그인";
+        const adminText = state.admin.me
+            ? `${state.admin.me.email} / ${state.admin.me.activeRole}`
+            : state.admin.accessToken ? "관리자 토큰 있음" : "관리자 미로그인";
+        el("userBadge").textContent = userText;
+        el("userBadge").className = `badge ${state.user.accessToken ? "ok" : "warn"}`;
+        el("adminBadge").textContent = adminText;
+        el("adminBadge").className = `badge ${state.admin.accessToken ? "ok" : "warn"}`;
+        renderRoleGuide();
+    }
+
+    function renderRoleGuide() {
+        const guide = el("roleGuide");
+        if (!guide) return;
+        if (!state.user.me) {
+            guide.textContent = "로그인 후 현재 보유 role을 확인할 수 있습니다. TUTOR 모드는 튜터 전환 후 선택할 수 있습니다.";
+            return;
+        }
+        const roles = state.user.me.roles || [];
+        if (roles.includes("TUTOR")) {
+            guide.textContent = `현재 보유 role: ${roles.join(", ")}. STUDENT/TUTOR 모드 전환이 가능합니다.`;
+            return;
+        }
+        guide.textContent = `현재 보유 role: ${roles.join(", ")}. TUTOR 모드는 튜터 전환 후 선택할 수 있습니다.`;
+    }
+
+    function fillNewUser() {
+        const suffix = new Date().toISOString().replace(/\D/g, "").slice(0, 14);
+        const email = `front-${suffix}@haru.local`;
+        el("signupEmail").value = email;
+        el("loginEmail").value = email;
+        el("signupName").value = "프론트 테스트 사용자";
+    }
+
+    function tutorProfileBody(complete = true) {
+        return {
+            displayName: el("tutorDisplayName").value,
+            shortIntroduction: complete ? el("tutorShortIntro").value : "",
+            aboutMe: complete ? el("tutorAbout").value : "",
+            whatIOffer: complete ? el("tutorOffer").value : "",
+            category: complete ? el("tutorCategory").value : "",
+            profileImageUrl: el("tutorProfileImage").value,
+            introVideoUrl: el("tutorIntroVideo").value,
+            thumbnailUrl: el("tutorThumbnail").value,
+            availableLanguages: complete ? el("tutorLanguages").value : "",
+            lessonPriceAmount: Number(el("tutorPrice").value),
+            availableTimeNote: complete ? el("tutorAvailableTime").value : "",
+            paymentMethod: complete ? el("tutorPayment").value : ""
+        };
+    }
+
+    function rememberTutorProfileId(id) {
+        if (!id) return;
+        state.lastTutorProfileId = String(id);
+        localStorage.setItem("haru.lastTutorProfileId", state.lastTutorProfileId);
+        el("adminTutorProfileId").value = state.lastTutorProfileId;
+    }
+
+    async function refreshUserMe() {
+        if (!state.user.accessToken) return;
+        const result = await request("GET", "/api/users/me", null, state.user.accessToken);
+        if (result.ok) {
+            state.user.me = result.data.data;
+            refreshBadges();
+        }
+    }
+
+    async function loadExperts() {
+        const result = await request("GET", "/api/tutors");
+        if (!result.ok) return;
+        const tbody = el("expertsTable");
+        const rows = result.data.data || [];
+        if (rows.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="5">조회 결과가 없습니다.</td></tr>';
+            return;
+        }
+        tbody.innerHTML = rows.map(item => `
+            <tr>
+                <td>${item.tutorProfileId}</td>
+                <td>${escapeHtml(item.displayName || "")}</td>
+                <td>${escapeHtml(item.category || "")}</td>
+                <td>${escapeHtml(item.availableLanguages || "")}</td>
+                <td>${item.lessonPriceAmount ?? ""}</td>
+            </tr>
+        `).join("");
+    }
+
+    function escapeHtml(value) {
+        return String(value)
+            .replaceAll("&", "&amp;")
+            .replaceAll("<", "&lt;")
+            .replaceAll(">", "&gt;")
+            .replaceAll('"', "&quot;")
+            .replaceAll("'", "&#039;");
+    }
+
+    function setScenarioRows(rows) {
+        const tbody = el("scenarioTable");
+        if (rows.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="3">아직 실행하지 않았습니다.</td></tr>';
+            return;
+        }
+        tbody.innerHTML = rows.map(row => `
+            <tr>
+                <td>${escapeHtml(row.step)}</td>
+                <td class="${row.ok ? "result-ok" : "result-fail"}">${row.ok ? "PASS" : "FAIL"}</td>
+                <td>${escapeHtml(row.detail)}</td>
+            </tr>
+        `).join("");
+    }
+
+    async function scenarioStep(rows, step, fn) {
+        try {
+            const detail = await fn();
+            rows.push({step, ok: true, detail});
+        } catch (error) {
+            rows.push({step, ok: false, detail: error.message});
+        }
+        setScenarioRows(rows);
+    }
+
+    function expectStatus(result, status, label) {
+        if (result.status !== status) {
+            throw new Error(`${label}: expected ${status}, got ${result.status}`);
+        }
+    }
+
+    const actions = {
+        fillNewUser,
+        clearLog() {
+            el("log").textContent = "대기 중";
+        },
+        clearUserSession() {
+            state.user = {accessToken: "", refreshToken: "", me: null};
+            localStorage.removeItem("haru.user.accessToken");
+            localStorage.removeItem("haru.user.refreshToken");
+            renderTokens();
+            refreshBadges();
+        },
+        clearAdminSession() {
+            state.admin = {accessToken: "", refreshToken: "", me: null};
+            localStorage.removeItem("haru.admin.accessToken");
+            localStorage.removeItem("haru.admin.refreshToken");
+            renderTokens();
+            refreshBadges();
+        },
+        async signup() {
+            const result = await request("POST", "/api/auth/signup", {
+                email: el("signupEmail").value,
+                password: el("signupPassword").value,
+                name: el("signupName").value,
+                timeZone: el("signupTimeZone").value
+            });
+            if (result.ok) {
+                setUserTokens(result.data.data);
+                el("loginEmail").value = el("signupEmail").value;
+                el("loginPassword").value = el("signupPassword").value;
+            }
+        },
+        async login() {
+            const result = await request("POST", "/api/auth/login", {
+                email: el("loginEmail").value,
+                password: el("loginPassword").value
+            });
+            if (result.ok) setUserTokens(result.data.data);
+        },
+        async authMe() {
+            const result = await request("GET", "/api/auth/me", null, state.user.accessToken);
+            if (result.ok) {
+                state.user.me = result.data.data;
+                refreshBadges();
+            }
+        },
+        async refresh() {
+            const result = await request("POST", "/api/auth/refresh", {
+                refreshToken: state.user.refreshToken
+            });
+            if (result.ok) setUserTokens(result.data.data);
+        },
+        async logout() {
+            const result = await request("POST", "/api/auth/logout", {
+                refreshToken: state.user.refreshToken
+            }, state.user.accessToken);
+            if (result.ok) actions.clearUserSession();
+        },
+        async usersMe() {
+            await refreshUserMe();
+        },
+        async updateUserProfile() {
+            const result = await request("PATCH", "/api/users/me", {
+                name: el("profileName").value,
+                mobileNumber: el("profileMobile").value || null,
+                timeZone: el("profileTimeZone").value
+            }, state.user.accessToken);
+            if (result.ok) {
+                state.user.me = result.data.data;
+                refreshBadges();
+            }
+        },
+        async setInvalidTimeZone() {
+            const previous = el("profileTimeZone").value;
+            el("profileTimeZone").value = "Not/AZone";
+            await actions.updateUserProfile();
+            el("profileTimeZone").value = previous;
+        },
+        async changeActiveRole() {
+            const result = await request("PATCH", "/api/users/me/active-role", {
+                activeRole: el("activeRole").value
+            }, state.user.accessToken);
+            if (result.ok) {
+                state.user.me = result.data.data;
+                refreshBadges();
+            }
+        },
+        async switchTutor() {
+            const result = await request("POST", "/api/tutors/me/switch", null, state.user.accessToken);
+            if (result.ok) {
+                rememberTutorProfileId(result.data.data.id);
+                await refreshUserMe();
+            }
+        },
+        async switchTutorAndStay() {
+            activateSection("tutor");
+            await actions.switchTutor();
+        },
+        async getTutorProfile() {
+            const result = await request("GET", "/api/tutors/me/profile", null, state.user.accessToken);
+            if (result.ok) rememberTutorProfileId(result.data.data.id);
+        },
+        async saveTutorProfile() {
+            const result = await request("PUT", "/api/tutors/me/profile", tutorProfileBody(true), state.user.accessToken);
+            if (result.ok) {
+                rememberTutorProfileId(result.data.data.id);
+                await refreshUserMe();
+            }
+        },
+        async testIncompleteTutorSubmit() {
+            const result = await request("PUT", "/api/tutors/me/profile", tutorProfileBody(false), state.user.accessToken);
+            if (result.ok) {
+                rememberTutorProfileId(result.data.data.id);
+                await refreshUserMe();
+                await request("POST", "/api/tutors/me/profile/submit", null, state.user.accessToken);
+            }
+        },
+        async submitTutorProfile() {
+            const result = await request("POST", "/api/tutors/me/profile/submit", null, state.user.accessToken);
+            if (result.ok) {
+                rememberTutorProfileId(result.data.data.id);
+                await refreshUserMe();
+            }
+        },
+        async adminLogin() {
+            const result = await request("POST", "/api/auth/login", {
+                email: el("adminEmail").value,
+                password: el("adminPassword").value
+            });
+            if (result.ok) setAdminTokens(result.data.data);
+        },
+        async adminMe() {
+            const result = await request("GET", "/api/auth/me", null, state.admin.accessToken);
+            if (result.ok) {
+                state.admin.me = result.data.data;
+                refreshBadges();
+            }
+        },
+        async approveTutor() {
+            const id = el("adminTutorProfileId").value;
+            const result = await request("PATCH", `/api/admin/tutors/${id}/approve`, null, state.admin.accessToken);
+            if (result.ok) {
+                el("adminApprovalStatus").textContent = `승인 완료: tutorProfileId=${result.data.data.id}, status=${result.data.data.status}`;
+            }
+            await refreshUserMe();
+            await loadExperts();
+        },
+        async rejectTutor() {
+            const id = el("adminTutorProfileId").value;
+            const result = await request("PATCH", `/api/admin/tutors/${id}/reject`, null, state.admin.accessToken);
+            if (result.ok) {
+                el("adminApprovalStatus").textContent = `반려 완료: tutorProfileId=${result.data.data.id}, status=${result.data.data.status}`;
+            }
+            await refreshUserMe();
+            await loadExperts();
+        },
+        loadExperts,
+        async runScenario() {
+            const rows = [];
+            setScenarioRows(rows);
+            const suffix = new Date().toISOString().replace(/\D/g, "").slice(0, 14);
+            const email = `scenario-front-${suffix}@haru.local`;
+            let profileId = null;
+
+            await scenarioStep(rows, "공개 Experts 조회", async () => {
+                const result = await request("GET", "/api/tutors");
+                expectStatus(result, 200, "GET /api/tutors");
+                return "공개 API 정상";
+            });
+            await scenarioStep(rows, "회원가입", async () => {
+                const result = await request("POST", "/api/auth/signup", {
+                    email,
+                    password: "password123!",
+                    name: "시나리오 사용자",
+                    timeZone: "Asia/Seoul"
+                });
+                expectStatus(result, 200, "signup");
+                setUserTokens(result.data.data);
+                return email;
+            });
+            await scenarioStep(rows, "중복 회원가입 차단", async () => {
+                const result = await request("POST", "/api/auth/signup", {
+                    email,
+                    password: "password123!",
+                    name: "시나리오 사용자",
+                    timeZone: "Asia/Seoul"
+                });
+                expectStatus(result, 409, "duplicate signup");
+                return "EMAIL_ALREADY_EXISTS";
+            });
+            await scenarioStep(rows, "튜터 전환", async () => {
+                const result = await request("POST", "/api/tutors/me/switch", null, state.user.accessToken);
+                expectStatus(result, 200, "switch tutor");
+                profileId = result.data.data.id;
+                rememberTutorProfileId(profileId);
+                await refreshUserMe();
+                return `profileId=${profileId}, status=${result.data.data.status}`;
+            });
+            await scenarioStep(rows, "미완성 제출 차단", async () => {
+                const result = await request("POST", "/api/tutors/me/profile/submit", null, state.user.accessToken);
+                expectStatus(result, 400, "submit incomplete");
+                return "INVALID_REQUEST";
+            });
+            await scenarioStep(rows, "프로필 저장", async () => {
+                const result = await request("PUT", "/api/tutors/me/profile", tutorProfileBody(true), state.user.accessToken);
+                expectStatus(result, 200, "save profile");
+                return result.data.data.status;
+            });
+            await scenarioStep(rows, "승인 요청", async () => {
+                const result = await request("POST", "/api/tutors/me/profile/submit", null, state.user.accessToken);
+                expectStatus(result, 200, "submit profile");
+                await refreshUserMe();
+                return result.data.data.status;
+            });
+            await scenarioStep(rows, "승인 전 Experts 미노출", async () => {
+                const result = await request("GET", "/api/tutors");
+                expectStatus(result, 200, "experts");
+                const found = result.data.data.some(item => item.tutorProfileId === profileId);
+                if (found) throw new Error("PENDING tutor exposed");
+                return "미노출 정상";
+            });
+            await scenarioStep(rows, "비관리자 승인 차단", async () => {
+                const result = await request("PATCH", `/api/admin/tutors/${profileId}/approve`, null, state.user.accessToken);
+                expectStatus(result, 403, "non-admin approve");
+                return "FORBIDDEN";
+            });
+
+            if (!state.admin.accessToken) {
+                rows.push({step: "관리자 승인/반려", ok: true, detail: "관리자 토큰이 없어 스킵"});
+                setScenarioRows(rows);
+                return;
+            }
+
+            await scenarioStep(rows, "관리자 승인", async () => {
+                const result = await request("PATCH", `/api/admin/tutors/${profileId}/approve`, null, state.admin.accessToken);
+                expectStatus(result, 200, "admin approve");
+                return result.data.data.status;
+            });
+            await scenarioStep(rows, "승인 후 Experts 노출", async () => {
+                const result = await request("GET", "/api/tutors");
+                expectStatus(result, 200, "experts after approve");
+                const found = result.data.data.some(item => item.tutorProfileId === profileId);
+                if (!found) throw new Error("APPROVED tutor not exposed");
+                return "노출 정상";
+            });
+            await scenarioStep(rows, "승인 프로필 수정 시 DRAFT 복귀", async () => {
+                el("tutorDisplayName").value = "수정된 Haru Korean Expert";
+                const result = await request("PUT", "/api/tutors/me/profile", tutorProfileBody(true), state.user.accessToken);
+                expectStatus(result, 200, "edit approved profile");
+                await refreshUserMe();
+                if (state.user.me.tutorProfileStatus !== "DRAFT") throw new Error("status is not DRAFT");
+                return "DRAFT 복귀";
+            });
+        }
+    };
+
+    init();
+</script>
+</body>
+</html>
