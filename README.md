@@ -1,75 +1,145 @@
+<div align="center">
+
+<img src="docs/images/haru-readme-banner.svg" alt="Haru Backend" width="100%">
+
 # Haru Backend
 
-Java Spring Boot 기반 Haru 백엔드 API 서버입니다.
+JWT 인증, 사용자 계정, 튜터 전환, 튜터 프로필 승인 흐름을 제공하는 Spring Boot 기반 API 서버입니다.
 
-현재 구현 범위는 JWT 인증, 사용자 프로필, 튜터 전환, 튜터 프로필 승인 흐름, Experts 공개 목록 조회입니다.
+`Spring Boot 3.5` · `Java 21` · `MySQL 8` · `Flyway` · `Docker Compose`
+
+<br>
+
+![Java](https://img.shields.io/badge/Java-21-007396?style=flat-square)
+![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.5.7-6DB33F?style=flat-square)
+![MySQL](https://img.shields.io/badge/MySQL-8.x-4479A1?style=flat-square)
+![Flyway](https://img.shields.io/badge/Flyway-enabled-CC0200?style=flat-square)
+![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?style=flat-square)
+
+</div>
+
+---
+
+## Overview
+
+Haru 백엔드는 하나의 사용자 계정으로 학생 모드와 튜터 모드를 함께 사용할 수 있도록 설계된 API 서버입니다.  
+튜터 전환은 즉시 판매 가능한 강사가 되는 절차가 아니며, 튜터 프로필 작성과 관리자 승인을 거쳐야 고객 메인 Experts 목록에 노출됩니다.
+
+현재 저장소에는 다음 산출물이 포함되어 있습니다.
+
+| Area | Description |
+| --- | --- |
+| Backend API | 인증, 사용자, 튜터, 관리자 API |
+| Test Console | 브라우저에서 전체 API 시나리오를 실행하는 테스트 프론트 |
+| API Docs | Swagger UI 및 OpenAPI JSON |
+| Database | Flyway 기반 MySQL 스키마 및 local seed |
+| Docker | backend + MySQL 통합 실행 환경 |
 
 ## Current Status
 
-현재까지 구현 및 검증된 범위입니다.
-
-- JWT 기반 회원가입, 로그인, 로그아웃, refresh token 회전
-- refresh token 재사용 차단
-- 마지막 로그인 시각 기록
-- 사용자 프로필 조회 및 수정
-- `roles`, `activeRole`, `tutorProfileStatus` 분리
-- 튜터 전환 시 `TUTOR` role 부여 및 `activeRole = TUTOR` 전환
-- 튜터 프로필 DRAFT/PENDING/APPROVED/REJECTED 상태 흐름
-- 관리자 승인 전 Experts 목록 미노출
-- 관리자 승인 후 Experts 목록 노출
-- 승인된 튜터 프로필 수정 시 DRAFT 복귀 및 재승인 요구
-- Swagger API 설명 추가
-- 브라우저 API Test Console 추가
-
-## Verification
-
-마지막 검증 결과:
-
-```text
-.\gradlew.bat build
-BUILD SUCCESSFUL
-```
-
-검증한 주요 시나리오:
-
-- 회원가입, 로그인, 로그아웃
-- access token 인증
-- refresh token 회전 및 재사용 차단
-- 사용자 프로필 수정
-- 튜터 전환, 프로필 임시저장, 승인요청 제출
-- 관리자 승인/반려
-- 승인 전 Experts 미노출
-- 승인 후 Experts 노출
-- 잘못된 요청, 인증 없음, 권한 없음, 없는 리소스 처리
+| Category | Status |
+| --- | --- |
+| Auth | 회원가입, 로그인, 로그아웃, refresh token 회전 및 재사용 차단 |
+| User | 프로필 조회/수정, 마지막 로그인 시각 기록, activeRole 변경 |
+| Tutor | 튜터 전환, 프로필 임시저장, 승인요청, 상태 관리 |
+| Admin | 튜터 프로필 승인/반려 |
+| Experts | 승인된 튜터만 공개 목록에 노출 |
+| Docs | Swagger, Postman 가이드, DB 문서, README |
+| Runtime | Docker Compose로 backend + MySQL 실행 |
 
 ## Screenshots
 
-API Test Console:
+### API Test Console
 
-![API Test Console](docs/images/test-console.png)
+<img src="docs/images/test-console.png" alt="API Test Console" width="100%">
 
-Swagger UI:
+### Swagger UI
 
-![Swagger UI](docs/images/swagger-ui.png)
+<img src="docs/images/swagger-ui.png" alt="Swagger UI" width="100%">
+
+## Quick Start
+
+Docker Compose로 백엔드, 테스트 프론트, MySQL을 한 번에 실행합니다.
+
+```powershell
+docker compose up --build -d
+```
+
+실행 후 아래 주소로 접속합니다.
+
+| Service | URL |
+| --- | --- |
+| Backend API | http://localhost:8080 |
+| API Test Console | http://localhost:8080/test-ui.html |
+| Swagger UI | http://localhost:8080/swagger-ui.html |
+| OpenAPI JSON | http://localhost:8080/v3/api-docs |
+| MySQL | localhost:3306 |
+
+컨테이너 상태 확인:
+
+```powershell
+docker compose ps
+```
+
+백엔드 로그 확인:
+
+```powershell
+docker compose logs -f backend
+```
+
+컨테이너 중지:
+
+```powershell
+docker compose down
+```
+
+DB 데이터까지 초기화:
+
+```powershell
+docker compose down -v
+```
+
+## Accounts
+
+Docker Compose 실행 시 Flyway local seed가 테스트용 관리자 계정을 생성합니다.
+
+### Service Account
+
+| Type | Value |
+| --- | --- |
+| Email | `admin@admin.com` |
+| Password | `admin1234` |
+| Role | `ADMIN`, `STUDENT` |
+
+### MySQL Account
+
+| Type | Value |
+| --- | --- |
+| Host | `localhost` |
+| Port | `3306` |
+| Database | `haru` |
+| Username | `haru` |
+| Password | `1q2w3e4r!` |
 
 ## Tech Stack
 
-- Java 21
-- Spring Boot 3.5.7
-- Spring Security
-- Spring Data JPA
-- Flyway
-- MySQL 8.x
-- Gradle
-- springdoc-openapi Swagger UI
+| Layer | Technology |
+| --- | --- |
+| Language | Java 21 |
+| Framework | Spring Boot 3.5.7 |
+| Security | Spring Security, JWT |
+| Database | MySQL 8.x |
+| Persistence | Spring Data JPA, Hibernate |
+| Migration | Flyway |
+| API Docs | springdoc-openapi |
+| Build | Gradle |
+| Runtime | Docker Compose |
 
-## Local Requirements
+## Local Development
 
-- JDK 21
-- Docker 또는 로컬 MySQL
-- MySQL 8.x
+Docker를 사용하지 않고 로컬에서 실행하려면 JDK 21과 MySQL 8.x가 필요합니다.
 
-기본 로컬 DB 설정은 다음과 같습니다.
+기본 DB 설정:
 
 ```yaml
 spring.datasource.url: jdbc:mysql://localhost:3306/haru
@@ -77,55 +147,20 @@ spring.datasource.username: haru
 spring.datasource.password: haru
 ```
 
-Docker로 MySQL을 실행하는 예시:
-
-```powershell
-docker run --name haru-mysql `
-  -e MYSQL_DATABASE=haru `
-  -e MYSQL_USER=haru `
-  -e MYSQL_PASSWORD=haru `
-  -e MYSQL_ROOT_PASSWORD=root `
-  -p 3306:3306 `
-  -d mysql:8.4
-```
-
-## Run
+애플리케이션 실행:
 
 ```powershell
 .\gradlew.bat bootRun
 ```
 
-서버 기본 포트:
-
-```text
-http://localhost:8080
-```
-
-Swagger UI:
-
-```text
-http://localhost:8080/swagger-ui.html
-```
-
-API Test Console:
-
-```text
-http://localhost:8080/test-ui.html
-```
-
-브라우저에서 회원가입, 로그인, refresh, 사용자 프로필 수정, 튜터 전환, 튜터 프로필 제출, 관리자 승인/반려, Experts 노출 여부를 직접 테스트할 수 있습니다.
-
-OpenAPI JSON:
-
-```text
-http://localhost:8080/v3/api-docs
-```
-
-## Test
+로컬 관리자 seed까지 적용하려면 `local` 프로필을 사용합니다.
 
 ```powershell
-.\gradlew.bat test
+$env:SPRING_PROFILES_ACTIVE='local'
+.\gradlew.bat bootRun
 ```
+
+## Build And Test
 
 전체 빌드:
 
@@ -133,106 +168,171 @@ http://localhost:8080/v3/api-docs
 .\gradlew.bat build
 ```
 
-현재 통합 테스트는 다음 흐름을 검증합니다.
+테스트만 실행:
 
-- 회원가입, 로그인, 로그아웃
-- access token 인증
-- refresh token 회전 및 재사용 차단
-- 사용자 프로필 조회/수정
-- activeRole 변경
-- 튜터 전환
-- 튜터 프로필 작성, 제출, 승인, 반려
-- 승인 전 Experts 미노출
-- 승인 후 Experts 노출
-- 승인된 프로필 수정 시 DRAFT 복귀 및 Experts 노출 중단
-- 잘못된 요청, 권한 없음, 인증 없음, 없는 리소스 처리
-
-## Database Migration
-
-Flyway를 사용해 DB 스키마를 버전 관리합니다.
-
-마이그레이션 파일 위치:
-
-```text
-src/main/resources/db/migration
+```powershell
+.\gradlew.bat test
 ```
 
-현재 주요 마이그레이션:
+최근 검증 결과:
 
-- `V1__auth_user_schema.sql`: 사용자, 권한, refresh token 기본 스키마
-- `V2__add_user_last_login_at.sql`: 마지막 로그인 시각 추가
-- `V3__create_tutor_profiles.sql`: 튜터 프로필 및 승인 상태 추가
+```text
+BUILD SUCCESSFUL
+```
 
-Hibernate `ddl-auto`는 `validate`로 설정되어 있습니다. 테이블/컬럼 변경은 Entity 수정만으로 끝내지 않고 Flyway 마이그레이션을 추가해야 합니다.
+Docker 환경에서 확인한 항목:
 
-## Auth and User Model
+| Check | Result |
+| --- | --- |
+| `docker compose up --build -d` | Passed |
+| backend container on `8080` | Passed |
+| mysql container on `3306` | Passed |
+| MySQL healthcheck | Passed |
+| Flyway migration | Passed |
+| Local admin seed | Passed |
+| `/test-ui.html` | HTTP 200 |
+| `/v3/api-docs` | HTTP 200 |
+| Admin login | Passed |
+
+## Domain Model
 
 사용자는 하나의 계정으로 학생 모드와 튜터 모드를 모두 사용할 수 있습니다.
 
-구분 기준:
+| Field | Meaning |
+| --- | --- |
+| `user_roles` | 계정에 부여된 사용 가능 역할 목록 |
+| `users.active_role` | 현재 사용자가 선택한 앱 모드 |
+| `tutor_profiles.status` | 튜터 프로필 심사 및 Experts 노출 상태 |
 
-- `user_roles`: 계정이 사용할 수 있는 권한/모드 목록
-- `users.active_role`: 현재 사용자가 선택한 앱 모드
-- `tutor_profiles.status`: 튜터 프로필 심사 및 Experts 노출 상태
-
-중요한 규칙:
+핵심 규칙:
 
 ```text
 activeRole = TUTOR
 ```
 
-는 튜터 모드 진입을 의미합니다.
+튜터 모드에 진입했다는 뜻입니다. 고객에게 판매 가능한 튜터라는 뜻은 아닙니다.
 
 ```text
 tutorProfileStatus = APPROVED
 ```
 
-일 때만 고객 메인 Experts 목록에 노출됩니다.
+이 상태일 때만 고객 메인 Experts 목록에 노출됩니다.
 
-## Main APIs
+튜터 프로필 상태:
 
-Auth:
+| Status | Meaning |
+| --- | --- |
+| `DRAFT` | 작성 중 |
+| `PENDING` | 승인 대기 |
+| `APPROVED` | 승인 완료 |
+| `REJECTED` | 반려 |
 
-- `POST /api/auth/signup`
-- `POST /api/auth/login`
-- `POST /api/auth/refresh`
-- `POST /api/auth/logout`
-- `GET /api/auth/me`
+## Database
 
-User:
+DB 스키마는 Flyway로 관리합니다.
 
-- `GET /api/users/me`
-- `PATCH /api/users/me`
-- `PATCH /api/users/me/active-role`
+```text
+src/main/resources/db/migration
+src/main/resources/db/seed/local
+```
 
-Tutor:
+주요 테이블:
 
-- `POST /api/tutors/me/switch`
-- `GET /api/tutors/me/profile`
-- `PUT /api/tutors/me/profile`
-- `POST /api/tutors/me/profile/submit`
-- `GET /api/tutors`
+| Table | Description |
+| --- | --- |
+| `users` | 사용자 계정 |
+| `user_roles` | 사용자 역할 목록 |
+| `refresh_tokens` | refresh token 저장 및 회전 관리 |
+| `tutor_profiles` | 튜터 프로필 및 승인 상태 |
+| `flyway_schema_history` | Flyway migration 이력 |
 
-Admin:
+현재 마이그레이션:
 
-- `PATCH /api/admin/tutors/{tutorProfileId}/approve`
-- `PATCH /api/admin/tutors/{tutorProfileId}/reject`
+| File | Description |
+| --- | --- |
+| `V1__auth_user_schema.sql` | 사용자, 역할, refresh token 기본 스키마 |
+| `V2__add_user_last_login_at.sql` | 마지막 로그인 시각 컬럼 추가 |
+| `V3__create_tutor_profiles.sql` | 튜터 프로필 및 승인 상태 추가 |
+| `R__local_admin_seed.sql` | 로컬 개발용 관리자 계정 seed |
+
+Hibernate `ddl-auto`는 `validate`로 설정되어 있습니다.  
+테이블이나 컬럼 변경은 Entity 수정만으로 처리하지 않고 Flyway 마이그레이션을 추가해야 합니다.
+
+## API Summary
+
+### Auth
+
+| Method | Path | Description |
+| --- | --- | --- |
+| `POST` | `/api/auth/signup` | 회원가입 |
+| `POST` | `/api/auth/login` | 로그인 |
+| `POST` | `/api/auth/refresh` | access token 재발급 |
+| `POST` | `/api/auth/logout` | 로그아웃 |
+| `GET` | `/api/auth/me` | 현재 로그인 사용자 조회 |
+
+### User
+
+| Method | Path | Description |
+| --- | --- | --- |
+| `GET` | `/api/users/me` | 내 사용자 정보 조회 |
+| `PATCH` | `/api/users/me` | 내 사용자 정보 수정 |
+| `PATCH` | `/api/users/me/active-role` | 현재 앱 모드 변경 |
+
+### Tutor
+
+| Method | Path | Description |
+| --- | --- | --- |
+| `POST` | `/api/tutors/me/switch` | 튜터 모드 전환 및 DRAFT 프로필 생성 |
+| `GET` | `/api/tutors/me/profile` | 내 튜터 프로필 조회 |
+| `PUT` | `/api/tutors/me/profile` | 내 튜터 프로필 저장 |
+| `POST` | `/api/tutors/me/profile/submit` | 튜터 프로필 승인 요청 |
+| `GET` | `/api/tutors` | 승인된 Experts 목록 조회 |
+
+### Admin
+
+| Method | Path | Description |
+| --- | --- | --- |
+| `PATCH` | `/api/admin/tutors/{tutorProfileId}/approve` | 튜터 프로필 승인 |
+| `PATCH` | `/api/admin/tutors/{tutorProfileId}/reject` | 튜터 프로필 반려 |
+
+상세 요청/응답은 Swagger UI 또는 Postman 문서를 기준으로 확인합니다.
+
+## Project Structure
+
+```text
+src/main/java/com/haru
+├── auth
+├── common
+├── tutor
+└── user
+
+src/main/resources
+├── db/migration
+├── db/seed/local
+└── static/test-ui.html
+
+docs
+├── DATABASE_SCHEMA.md
+├── POSTMAN_API_TEST_GUIDE.md
+└── TUTOR_ROLE_AND_PROFILE_FLOW.md
+```
 
 ## Documentation
 
-상세 문서:
+| Document | Description |
+| --- | --- |
+| [DB 테이블 구조](docs/DATABASE_SCHEMA.md) | 테이블, 컬럼, 제약조건, 관계 |
+| [Postman API 테스트 가이드](docs/POSTMAN_API_TEST_GUIDE.md) | API 수동 테스트 절차 |
+| [튜터 전환 및 activeRole 흐름](docs/TUTOR_ROLE_AND_PROFILE_FLOW.md) | 튜터 모드와 승인 상태 구분 |
+| [프로젝트 개요](docs/PROJECT_OVERVIEW.md) | 프로젝트 방향성 |
+| [백엔드 아키텍처 계획](docs/BACKEND_ARCHITECTURE_PLAN.md) | 백엔드 구조 계획 |
+| [API 계획](docs/API_PLANNING.md) | API 설계 초안 |
+| [구현 로드맵](docs/IMPLEMENTATION_ROADMAP.md) | 구현 단계 |
 
-- `docs/POSTMAN_API_TEST_GUIDE.md`: Postman 테스트 가이드
-- `docs/TUTOR_ROLE_AND_PROFILE_FLOW.md`: 튜터 전환, activeRole, tutorProfileStatus 흐름
-- `docs/DATABASE_SCHEMA.md`: DB 테이블, 컬럼, 제약조건, 관계 정리
-- `docs/PROJECT_OVERVIEW.md`: 프로젝트 개요
-- `docs/BACKEND_ARCHITECTURE_PLAN.md`: 백엔드 구조 계획
-- `docs/API_PLANNING.md`: API 계획
-- `docs/IMPLEMENTATION_ROADMAP.md`: 구현 로드맵
-
-## Notes
+## Operational Notes
 
 - `/api/tutors`는 공개 API입니다.
-- `/api/admin/**`는 `ROLE_ADMIN` 권한이 필요합니다.
-- refresh token은 회전 방식입니다. 한 번 사용한 refresh token은 재사용할 수 없습니다.
-- 승인된 튜터 프로필을 수정하면 `DRAFT`로 돌아가며, 재제출 및 재승인이 필요합니다.
+- `/api/admin/**`는 `ADMIN` 권한이 필요합니다.
+- refresh token은 회전 방식입니다. 한 번 사용된 refresh token은 재사용할 수 없습니다.
+- 승인된 튜터 프로필을 수정하면 상태가 `DRAFT`로 돌아가며, 다시 승인 요청과 관리자 승인이 필요합니다.
+- Docker Compose DB 비밀번호는 로컬 개발용입니다. 운영 환경에서는 반드시 별도 secret으로 교체해야 합니다.

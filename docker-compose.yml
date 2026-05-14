@@ -1,0 +1,41 @@
+services:
+  mysql:
+    image: mysql:8.4
+    environment:
+      MYSQL_DATABASE: haru
+      MYSQL_USER: haru
+      MYSQL_PASSWORD: "1q2w3e4r!"
+      MYSQL_ROOT_PASSWORD: "1q2w3e4r!"
+      TZ: Asia/Seoul
+    ports:
+      - "3306:3306"
+    volumes:
+      - haru-mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uharu -p$${MYSQL_PASSWORD} --silent"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 20s
+    restart: unless-stopped
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      SPRING_PROFILES_ACTIVE: local
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/haru?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+      SPRING_DATASOURCE_USERNAME: haru
+      SPRING_DATASOURCE_PASSWORD: "1q2w3e4r!"
+      SPRING_FLYWAY_LOCATIONS: classpath:db/migration,classpath:db/seed/local
+      HARU_JWT_SECRET: docker-local-development-secret-key-minimum-32-bytes
+    ports:
+      - "8080:8080"
+    depends_on:
+      mysql:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  haru-mysql-data:
