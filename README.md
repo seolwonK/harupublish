@@ -224,6 +224,7 @@ Admin:
 
 - `docs/POSTMAN_API_TEST_GUIDE.md`: Postman 테스트 가이드
 - `docs/TUTOR_ROLE_AND_PROFILE_FLOW.md`: 튜터 전환, activeRole, tutorProfileStatus 흐름
+- `docs/DATABASE_SCHEMA.md`: DB 테이블, 컬럼, 제약조건, 관계 정리
 - `docs/PROJECT_OVERVIEW.md`: 프로젝트 개요
 - `docs/BACKEND_ARCHITECTURE_PLAN.md`: 백엔드 구조 계획
 - `docs/API_PLANNING.md`: API 계획
