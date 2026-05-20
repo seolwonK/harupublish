@@ -291,7 +291,7 @@ class ApiScenarioIntegrationTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.error.code").value("INVALID_REQUEST"));
 
-        saveCompleteTutorProfile(tutorTokens.accessToken(), "Scenario Korean Expert", 25000);
+        saveCompleteTutorProfile(tutorTokens.accessToken(), "Scenario Korean Expert", 25000, 45000);
 
         mockMvc.perform(post("/api/tutors/me/profile/submit")
                         .header("Authorization", auth(tutorTokens.accessToken())))
@@ -299,6 +299,10 @@ class ApiScenarioIntegrationTest {
                 .andExpect(jsonPath("$.data.status").value("PENDING"));
 
         assertThat(expertsContains(tutorProfileId)).isFalse();
+
+        mockMvc.perform(get("/api/tutors/%d".formatted(tutorProfileId)))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.error.code").value("NOT_FOUND"));
 
         mockMvc.perform(patch("/api/admin/tutors/%d/reject".formatted(tutorProfileId))
                         .header("Authorization", auth(adminTokens.accessToken())))
@@ -310,7 +314,7 @@ class ApiScenarioIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.tutorProfileStatus").value("REJECTED"));
 
-        saveCompleteTutorProfile(tutorTokens.accessToken(), "Scenario Korean Expert", 25000);
+        saveCompleteTutorProfile(tutorTokens.accessToken(), "Scenario Korean Expert", 25000, 45000);
 
         mockMvc.perform(get("/api/users/me")
                         .header("Authorization", auth(tutorTokens.accessToken())))
@@ -329,13 +333,24 @@ class ApiScenarioIntegrationTest {
 
         assertThat(expertsContains(tutorProfileId)).isTrue();
 
-        saveCompleteTutorProfile(tutorTokens.accessToken(), "Edited Korean Expert", 30000);
+        mockMvc.perform(get("/api/tutors/%d".formatted(tutorProfileId)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.id").value(tutorProfileId))
+                .andExpect(jsonPath("$.data.category").value("KOREAN"))
+                .andExpect(jsonPath("$.data.availableLanguages[0]").value("Korean"))
+                .andExpect(jsonPath("$.data.lessonPrice25Amount").value(25000))
+                .andExpect(jsonPath("$.data.lessonPrice50Amount").value(45000));
+
+        saveCompleteTutorProfile(tutorTokens.accessToken(), "Edited Korean Expert", 30000, 55000);
 
         mockMvc.perform(get("/api/users/me")
                         .header("Authorization", auth(tutorTokens.accessToken())))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.tutorProfileStatus").value("DRAFT"));
         assertThat(expertsContains(tutorProfileId)).isFalse();
+
+        mockMvc.perform(get("/api/tutors/%d".formatted(tutorProfileId)))
+                .andExpect(status().isNotFound());
 
         mockMvc.perform(patch("/api/admin/tutors/%d/reject".formatted(tutorProfileId))
                         .header("Authorization", auth(adminTokens.accessToken())))
@@ -357,6 +372,46 @@ class ApiScenarioIntegrationTest {
                         .header("Authorization", auth(adminTokens.accessToken())))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.error.code").value("NOT_FOUND"));
+    }
+
+    @Test
+    void structuredTutorProfileValidationScenarios() throws Exception {
+        AuthTokens tutorTokens = signup(uniqueEmail("structured-tutor"));
+
+        mockMvc.perform(post("/api/tutors/me/switch")
+                        .header("Authorization", auth(tutorTokens.accessToken())))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(put("/api/tutors/me/profile")
+                        .header("Authorization", auth(tutorTokens.accessToken()))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(completeTutorProfileJson("https://example.com/intro.mp4", 25000, 45000, "[\"Korean\", \"English\"]")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.introVideoUrl").value("https://example.com/intro.mp4"));
+
+        mockMvc.perform(put("/api/tutors/me/profile")
+                        .header("Authorization", auth(tutorTokens.accessToken()))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(completeTutorProfileJson("https://youtu.be/haru-intro", 25000, 45000, "[\"Korean\", \"English\"]").replace("\"category\": \"KOREAN\"", "\"category\": \"INVALID\"")))
+                .andExpect(status().isBadRequest());
+
+        mockMvc.perform(put("/api/tutors/me/profile")
+                        .header("Authorization", auth(tutorTokens.accessToken()))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(completeTutorProfileJson("https://youtu.be/haru-intro", 0, 45000, "[\"Korean\", \"English\"]")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error.code").value("INVALID_REQUEST"));
+
+        mockMvc.perform(put("/api/tutors/me/profile")
+                        .header("Authorization", auth(tutorTokens.accessToken()))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(completeTutorProfileJson("https://youtu.be/haru-intro", 25000, 45000, "[]")))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(post("/api/tutors/me/profile/submit")
+                        .header("Authorization", auth(tutorTokens.accessToken())))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error.code").value("INVALID_REQUEST"));
     }
 
     private AuthTokens signup(String email) throws Exception {
@@ -400,27 +455,33 @@ class ApiScenarioIntegrationTest {
         return login(email);
     }
 
-    private void saveCompleteTutorProfile(String accessToken, String displayName, int lessonPriceAmount) throws Exception {
+    private void saveCompleteTutorProfile(String accessToken, String displayName, int lessonPrice25Amount, int lessonPrice50Amount) throws Exception {
         mockMvc.perform(put("/api/tutors/me/profile")
                         .header("Authorization", auth(accessToken))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                {
-                                  "displayName": "%s",
-                                  "shortIntroduction": "Practical Korean lessons for work and travel.",
-                                  "aboutMe": "I help learners speak Korean with confidence.",
-                                  "whatIOffer": "Conversation, pronunciation, and interview preparation.",
-                                  "category": "KOREAN",
-                                  "profileImageUrl": "https://example.com/profile.jpg",
-                                  "introVideoUrl": "https://example.com/intro.mp4",
-                                  "thumbnailUrl": "https://example.com/thumb.jpg",
-                                  "availableLanguages": "Korean, English",
-                                  "lessonPriceAmount": %d,
-                                  "availableTimeNote": "Weekday evenings KST",
-                                  "paymentMethod": "BANK_TRANSFER"
-                                }
-                                """.formatted(displayName, lessonPriceAmount)))
+                        .content(completeTutorProfileJson("https://youtu.be/haru-intro", lessonPrice25Amount, lessonPrice50Amount, "[\"Korean\", \"English\"]")
+                                .replace("Scenario Korean Expert", displayName)))
                 .andExpect(status().isOk());
+    }
+
+    private String completeTutorProfileJson(String introVideoUrl, int lessonPrice25Amount, int lessonPrice50Amount, String availableLanguagesJson) {
+        return """
+                {
+                  "displayName": "Scenario Korean Expert",
+                  "shortIntroduction": "Practical Korean lessons for work and travel.",
+                  "aboutMe": "I help learners speak Korean with confidence.",
+                  "whatIOffer": "Conversation, pronunciation, and interview preparation.",
+                  "category": "KOREAN",
+                  "profileImageUrl": "https://example.com/profile.jpg",
+                  "introVideoUrl": "%s",
+                  "thumbnailUrl": "https://example.com/thumb.jpg",
+                  "availableLanguages": %s,
+                  "lessonPrice25Amount": %d,
+                  "lessonPrice50Amount": %d,
+                  "availableTimeNote": "Weekday evenings KST",
+                  "paymentMethod": "BANK_TRANSFER"
+                }
+                """.formatted(introVideoUrl, availableLanguagesJson, lessonPrice25Amount, lessonPrice50Amount);
     }
 
     private boolean expertsContains(long tutorProfileId) throws Exception {

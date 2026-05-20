@@ -173,10 +173,17 @@ profileImageUrl
 introVideoUrl
 thumbnailUrl
 availableLanguages
-lessonPriceAmount
+lessonPrice25Amount
+lessonPrice50Amount
 availableTimeNote
 paymentMethod
 ```
+
+현재 MVP 정책:
+
+- `category`는 `KOREAN`, `KPOP`, `KBEAUTY`, `OTHER` 중 하나다.
+- `availableLanguages`는 API에서 문자열 배열로 사용한다.
+- `introVideoUrl`은 비어 있거나 YouTube URL이어야 한다.
 
 중요 규칙:
 
@@ -204,7 +211,8 @@ aboutMe
 whatIOffer
 category
 availableLanguages
-lessonPriceAmount
+lessonPrice25Amount
+lessonPrice50Amount
 availableTimeNote
 paymentMethod
 ```
@@ -283,6 +291,23 @@ GET /api/tutors
 - `tutor_profiles.status = APPROVED`인 프로필만 반환한다.
 - `activeRole = TUTOR`만으로는 절대 노출하지 않는다.
 
+### 10. Expert 공개 상세 조회
+
+API:
+
+```http
+GET /api/tutors/{tutorProfileId}
+```
+
+인증:
+
+- 현재 구현상 공개 API다.
+
+동작:
+
+- `tutor_profiles.status = APPROVED`인 프로필만 반환한다.
+- `DRAFT`, `PENDING`, `REJECTED` 상태 프로필은 공개 상세 API에서 `404 NOT_FOUND`가 반환된다.
+
 ## 상태별 판단표
 
 | 상황 | roles | activeRole | tutorProfile.status | 튜터 대시보드 | 프로필 작성 | Experts 노출 |
@@ -313,6 +338,7 @@ GET /api/tutors
 
 ```text
 src/main/java/com/haru/tutor/domain/TutorProfile.java
+src/main/java/com/haru/tutor/domain/TutorCategory.java
 src/main/java/com/haru/tutor/domain/TutorProfileStatus.java
 ```
 
@@ -341,6 +367,7 @@ DB 마이그레이션:
 
 ```text
 src/main/resources/db/migration/V3__create_tutor_profiles.sql
+src/main/resources/db/migration/V4__structure_tutor_profile_pricing.sql
 ```
 
 테스트:

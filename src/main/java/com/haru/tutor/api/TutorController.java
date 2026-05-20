@@ -3,8 +3,10 @@ package com.haru.tutor.api;
 import com.haru.common.response.ApiResponse;
 import com.haru.common.security.HaruPrincipal;
 import com.haru.tutor.api.dto.ExpertListResponse;
+import com.haru.tutor.api.dto.ImageUploadResponse;
 import com.haru.tutor.api.dto.TutorProfileRequest;
 import com.haru.tutor.api.dto.TutorProfileResponse;
+import com.haru.tutor.application.ImageStorageService;
 import com.haru.tutor.application.TutorService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -18,7 +20,9 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 
@@ -27,9 +31,11 @@ import java.util.List;
 public class TutorController {
 
     private final TutorService tutorService;
+    private final ImageStorageService imageStorageService;
 
-    public TutorController(TutorService tutorService) {
+    public TutorController(TutorService tutorService, ImageStorageService imageStorageService) {
         this.tutorService = tutorService;
+        this.imageStorageService = imageStorageService;
     }
 
     @Operation(
@@ -66,6 +72,20 @@ public class TutorController {
     }
 
     @Operation(
+            summary = "튜터 프로필 이미지 업로드",
+            description = "프로필 이미지 또는 썸네일로 사용할 이미지 파일을 업로드하고, 프로필 저장 요청에 넣을 수 있는 URL을 반환합니다.",
+            security = @SecurityRequirement(name = "bearerAuth")
+    )
+    @PostMapping(value = "/api/tutors/me/profile/images", consumes = "multipart/form-data")
+    public ApiResponse<ImageUploadResponse> uploadProfileImage(
+            @AuthenticationPrincipal HaruPrincipal principal,
+            @RequestParam("file") MultipartFile file
+    ) {
+        String url = imageStorageService.storeTutorProfileImage(principal.userId(), file);
+        return ApiResponse.success(new ImageUploadResponse(url));
+    }
+
+    @Operation(
             summary = "튜터 프로필 승인요청 제출",
             description = "필수값이 채워진 튜터 프로필을 PENDING 상태로 변경합니다. 관리자가 승인하기 전까지 Experts 목록에 노출되지 않습니다.",
             security = @SecurityRequirement(name = "bearerAuth")
@@ -96,11 +116,30 @@ public class TutorController {
     }
 
     @Operation(
+            summary = "튜터 승인 대기 목록 조회",
+            description = "관리자가 PENDING 상태의 튜터 프로필을 신청 시각 오름차순으로 조회합니다.",
+            security = @SecurityRequirement(name = "bearerAuth")
+    )
+    @GetMapping("/api/admin/tutors/pending")
+    public ApiResponse<List<TutorProfileResponse>> getPendingProfiles() {
+        return ApiResponse.success(tutorService.getPendingProfiles());
+    }
+
+    @Operation(
             summary = "Experts 공개 목록 조회",
             description = "고객 메인에 노출할 승인 완료(APPROVED) 튜터 프로필만 조회합니다. 인증 없이 호출할 수 있습니다."
     )
     @GetMapping("/api/tutors")
     public ApiResponse<List<ExpertListResponse>> getApprovedExperts() {
         return ApiResponse.success(tutorService.getApprovedExperts());
+    }
+
+    @Operation(
+            summary = "Expert 공개 상세 조회",
+            description = "승인 완료(APPROVED) 튜터 프로필 상세만 공개 조회합니다. 미승인 프로필은 공개 API에서 찾을 수 없습니다."
+    )
+    @GetMapping("/api/tutors/{tutorProfileId}")
+    public ApiResponse<TutorProfileResponse> getApprovedExpert(@PathVariable Long tutorProfileId) {
+        return ApiResponse.success(tutorService.getApprovedProfile(tutorProfileId));
     }
 }

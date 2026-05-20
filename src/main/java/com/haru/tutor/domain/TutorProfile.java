@@ -17,6 +17,7 @@ import jakarta.persistence.Table;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.List;
 
 @Entity
 @Table(name = "tutor_profiles")
@@ -42,8 +43,9 @@ public class TutorProfile {
     @Column(name = "what_i_offer", columnDefinition = "TEXT")
     private String whatIOffer;
 
+    @Enumerated(EnumType.STRING)
     @Column(length = 50)
-    private String category;
+    private TutorCategory category;
 
     @Column(name = "profile_image_url", length = 500)
     private String profileImageUrl;
@@ -57,8 +59,11 @@ public class TutorProfile {
     @Column(name = "available_languages", length = 255)
     private String availableLanguages;
 
-    @Column(name = "lesson_price_amount", precision = 10, scale = 2)
-    private BigDecimal lessonPriceAmount;
+    @Column(name = "lesson_price_25_amount", precision = 10, scale = 2)
+    private BigDecimal lessonPrice25Amount;
+
+    @Column(name = "lesson_price_50_amount", precision = 10, scale = 2)
+    private BigDecimal lessonPrice50Amount;
 
     @Column(name = "available_time_note", length = 500)
     private String availableTimeNote;
@@ -104,12 +109,13 @@ public class TutorProfile {
             String shortIntroduction,
             String aboutMe,
             String whatIOffer,
-            String category,
+            TutorCategory category,
             String profileImageUrl,
             String introVideoUrl,
             String thumbnailUrl,
-            String availableLanguages,
-            BigDecimal lessonPriceAmount,
+            List<String> availableLanguages,
+            BigDecimal lessonPrice25Amount,
+            BigDecimal lessonPrice50Amount,
             String availableTimeNote,
             String paymentMethod
     ) {
@@ -121,8 +127,9 @@ public class TutorProfile {
         this.profileImageUrl = profileImageUrl;
         this.introVideoUrl = introVideoUrl;
         this.thumbnailUrl = thumbnailUrl;
-        this.availableLanguages = availableLanguages;
-        this.lessonPriceAmount = lessonPriceAmount;
+        this.availableLanguages = joinLanguages(availableLanguages);
+        this.lessonPrice25Amount = lessonPrice25Amount;
+        this.lessonPrice50Amount = lessonPrice50Amount;
         this.availableTimeNote = availableTimeNote;
         this.paymentMethod = paymentMethod;
         if (status == TutorProfileStatus.REJECTED || status == TutorProfileStatus.APPROVED) {
@@ -167,14 +174,30 @@ public class TutorProfile {
                 || isBlank(shortIntroduction)
                 || isBlank(aboutMe)
                 || isBlank(whatIOffer)
-                || isBlank(category)
+                || category == null
                 || isBlank(availableLanguages)
-                || lessonPriceAmount == null
-                || lessonPriceAmount.signum() < 0
-                || isBlank(availableTimeNote)
-                || isBlank(paymentMethod)) {
+                || lessonPrice25Amount == null
+                || lessonPrice25Amount.signum() <= 0
+                || lessonPrice50Amount == null
+                || lessonPrice50Amount.signum() <= 0) {
             throw new BusinessException(ErrorCode.INVALID_REQUEST, "Tutor profile required fields must be completed before submit.");
         }
+    }
+
+    private String joinLanguages(List<String> languages) {
+        if (languages == null) {
+            return null;
+        }
+        String joined = languages.stream()
+                .map(String::trim)
+                .filter(language -> !language.isBlank())
+                .distinct()
+                .reduce((left, right) -> left + "," + right)
+                .orElse("");
+        if (joined.length() > 255) {
+            throw new BusinessException(ErrorCode.INVALID_REQUEST, "availableLanguages must fit within 255 characters.");
+        }
+        return joined;
     }
 
     private boolean isBlank(String value) {
@@ -209,7 +232,7 @@ public class TutorProfile {
         return whatIOffer;
     }
 
-    public String getCategory() {
+    public TutorCategory getCategory() {
         return category;
     }
 
@@ -225,12 +248,22 @@ public class TutorProfile {
         return thumbnailUrl;
     }
 
-    public String getAvailableLanguages() {
-        return availableLanguages;
+    public List<String> getAvailableLanguages() {
+        if (isBlank(availableLanguages)) {
+            return List.of();
+        }
+        return List.of(availableLanguages.split(",")).stream()
+                .map(String::trim)
+                .filter(language -> !language.isBlank())
+                .toList();
     }
 
-    public BigDecimal getLessonPriceAmount() {
-        return lessonPriceAmount;
+    public BigDecimal getLessonPrice25Amount() {
+        return lessonPrice25Amount;
+    }
+
+    public BigDecimal getLessonPrice50Amount() {
+        return lessonPrice50Amount;
     }
 
     public String getAvailableTimeNote() {

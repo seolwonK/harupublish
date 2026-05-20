@@ -1,19 +1,22 @@
 package com.haru.tutor.api.dto;
 
 import com.haru.tutor.domain.TutorProfile;
+import com.haru.tutor.domain.TutorCategory;
 
 import java.math.BigDecimal;
+import java.util.List;
 
 public record ExpertListResponse(
         Long tutorProfileId,
         Long userId,
         String displayName,
         String shortIntroduction,
-        String category,
+        TutorCategory category,
         String profileImageUrl,
         String thumbnailUrl,
-        String availableLanguages,
-        BigDecimal lessonPriceAmount
+        List<String> availableLanguages,
+        BigDecimal lessonPrice25Amount,
+        BigDecimal lessonPrice50Amount
 ) {
 
     public static ExpertListResponse from(TutorProfile profile) {
@@ -26,7 +29,8 @@ public record ExpertListResponse(
                 profile.getProfileImageUrl(),
                 profile.getThumbnailUrl(),
                 profile.getAvailableLanguages(),
-                profile.getLessonPriceAmount()
+                profile.getLessonPrice25Amount(),
+                profile.getLessonPrice50Amount()
         );
     }
 }

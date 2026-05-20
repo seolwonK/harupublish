@@ -79,10 +79,11 @@ class TutorIntegrationTest {
                                   "whatIOffer": "Conversation, pronunciation, and interview preparation.",
                                   "category": "KOREAN",
                                   "profileImageUrl": "https://example.com/profile.jpg",
-                                  "introVideoUrl": "https://example.com/intro.mp4",
+                                  "introVideoUrl": "https://youtu.be/haru-intro",
                                   "thumbnailUrl": "https://example.com/thumb.jpg",
-                                  "availableLanguages": "Korean, English",
-                                  "lessonPriceAmount": 25000,
+                                  "availableLanguages": ["Korean", "English"],
+                                  "lessonPrice25Amount": 25000,
+                                  "lessonPrice50Amount": 45000,
                                   "availableTimeNote": "Weekday evenings KST",
                                   "paymentMethod": "BANK_TRANSFER"
                                 }
@@ -108,11 +109,24 @@ class TutorIntegrationTest {
                 .getContentAsString();
         assertThat(containsTutorProfile(pendingExpertsResponse, tutorProfileId)).isFalse();
 
+        mockMvc.perform(get("/api/tutors/%d".formatted(tutorProfileId)))
+                .andExpect(status().isNotFound());
+
         mockMvc.perform(patch("/api/admin/tutors/%d/approve".formatted(tutorProfileId))
                         .header("Authorization", "Bearer " + tutorAccessToken))
                 .andExpect(status().isForbidden());
 
         String adminAccessToken = createAdminAndLogin();
+        mockMvc.perform(get("/api/admin/tutors/pending")
+                        .header("Authorization", "Bearer " + tutorAccessToken))
+                .andExpect(status().isForbidden());
+
+        mockMvc.perform(get("/api/admin/tutors/pending")
+                        .header("Authorization", "Bearer " + adminAccessToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data[0].id").value(tutorProfileId))
+                .andExpect(jsonPath("$.data[0].status").value("PENDING"));
+
         mockMvc.perform(patch("/api/admin/tutors/%d/approve".formatted(tutorProfileId))
                         .header("Authorization", "Bearer " + adminAccessToken))
                 .andExpect(status().isOk())
@@ -129,6 +143,14 @@ class TutorIntegrationTest {
                 .getResponse()
                 .getContentAsString();
         assertThat(containsTutorProfile(approvedExpertsResponse, tutorProfileId)).isTrue();
+
+        mockMvc.perform(get("/api/tutors/%d".formatted(tutorProfileId)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.id").value(tutorProfileId))
+                .andExpect(jsonPath("$.data.category").value("KOREAN"))
+                .andExpect(jsonPath("$.data.availableLanguages[0]").value("Korean"))
+                .andExpect(jsonPath("$.data.lessonPrice25Amount").value(25000))
+                .andExpect(jsonPath("$.data.lessonPrice50Amount").value(45000));
     }
 
     private boolean containsTutorProfile(String response, long tutorProfileId) throws Exception {

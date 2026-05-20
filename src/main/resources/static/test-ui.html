@@ -533,14 +533,23 @@
 
             <div class="grid">
                 <div class="field"><label>표시 이름</label><input id="tutorDisplayName" value="Haru Korean Expert"></div>
-                <div class="field"><label>카테고리</label><input id="tutorCategory" value="KOREAN"></div>
+                <div class="field">
+                    <label>카테고리</label>
+                    <select id="tutorCategory">
+                        <option value="KOREAN">KOREAN</option>
+                        <option value="KPOP">KPOP</option>
+                        <option value="KBEAUTY">KBEAUTY</option>
+                        <option value="OTHER">OTHER</option>
+                    </select>
+                </div>
                 <div class="field"><label>짧은 소개</label><input id="tutorShortIntro" value="실전 한국어 회화 수업"></div>
                 <div class="field"><label>가능 언어</label><input id="tutorLanguages" value="Korean, English"></div>
-                <div class="field"><label>수업 가격</label><input id="tutorPrice" type="number" value="25000"></div>
+                <div class="field"><label>25분 수업 가격</label><input id="tutorPrice25" type="number" value="25000"></div>
+                <div class="field"><label>50분 수업 가격</label><input id="tutorPrice50" type="number" value="45000"></div>
                 <div class="field"><label>가능 시간</label><input id="tutorAvailableTime" value="Weekday evenings KST"></div>
                 <div class="field"><label>지급 수단</label><input id="tutorPayment" value="BANK_TRANSFER"></div>
                 <div class="field"><label>프로필 이미지 URL</label><input id="tutorProfileImage" value="https://example.com/profile.jpg"></div>
-                <div class="field"><label>소개 영상 URL</label><input id="tutorIntroVideo" value="https://example.com/intro.mp4"></div>
+                <div class="field"><label>소개 영상 URL</label><input id="tutorIntroVideo" value="https://youtu.be/haru-intro"></div>
                 <div class="field"><label>썸네일 URL</label><input id="tutorThumbnail" value="https://example.com/thumb.jpg"></div>
                 <div class="field"><label>자기소개</label><textarea id="tutorAbout">한국어 학습자가 자신 있게 말하도록 돕습니다.</textarea></div>
                 <div class="field"><label>제공 수업</label><textarea id="tutorOffer">회화, 발음, 면접 한국어를 제공합니다.</textarea></div>
@@ -593,6 +602,116 @@
 
             <h3>관리자 토큰</h3>
             <div class="panel token-box" id="adminAccessToken">없음</div>
+        </section>
+
+        <section id="schedule">
+            <div class="section-head">
+                <div>
+                    <h2>Schedule</h2>
+                    <p>Tutor availability slots can be saved, read privately, and read publicly after approval.</p>
+                </div>
+                <div class="actions">
+                    <button data-action="saveSchedule">Save schedule</button>
+                    <button class="secondary" data-action="getMySchedule">Get my schedule</button>
+                </div>
+            </div>
+
+            <div class="grid">
+                <div class="panel">
+                    <h3>Slots</h3>
+                    <div class="field">
+                        <label>UTC startAt values</label>
+                        <textarea id="scheduleSlots">2026-05-20T01:00:00Z
+2026-05-20T01:30:00Z</textarea>
+                    </div>
+                    <p>Enter one UTC instant per line. Each value must be aligned to a 30-minute slot.</p>
+                    <div class="actions">
+                        <button class="secondary" data-action="fillSampleSchedule">Fill sample</button>
+                        <button class="secondary" data-action="testInvalidScheduleSlot">Invalid slot test</button>
+                    </div>
+                </div>
+
+                <div class="panel">
+                    <h3>Range</h3>
+                    <div class="field"><label>from</label><input id="scheduleFrom" value="2026-05-20T00:00:00Z"></div>
+                    <div class="field"><label>to</label><input id="scheduleTo" value="2026-05-20T03:00:00Z"></div>
+                    <div class="field"><label>public tutorProfileId</label><input id="publicScheduleTutorProfileId" type="number" placeholder="1"></div>
+                    <div class="actions">
+                        <button class="secondary" data-action="getPublicSchedule">Get public schedule</button>
+                        <button class="secondary" data-action="testInvalidScheduleRange">Invalid range test</button>
+                    </div>
+                    <p>Public schedule returns only APPROVED tutor profiles.</p>
+                </div>
+            </div>
+
+            <div class="panel">
+                <h3>Schedule result</h3>
+                <table>
+                    <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>startAt</th>
+                        <th>endAt</th>
+                    </tr>
+                    </thead>
+                    <tbody id="scheduleTable">
+                    <tr><td colspan="3">No results.</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <section id="booking">
+            <div class="section-head">
+                <div>
+                    <h2>Booking</h2>
+                    <p>Create a 25-minute booking from an APPROVED tutor schedule slot, then read, cancel, or check join status.</p>
+                </div>
+                <div class="actions">
+                    <button data-action="createBooking">Create booking</button>
+                    <button class="secondary" data-action="getMyBookings">Get my bookings</button>
+                </div>
+            </div>
+
+            <div class="grid">
+                <div class="panel">
+                    <h3>Create</h3>
+                    <div class="field"><label>tutorProfileId</label><input id="bookingTutorProfileId" type="number" placeholder="1"></div>
+                    <div class="field"><label>scheduleSlotId</label><input id="bookingScheduleSlotId" type="number" placeholder="1"></div>
+                    <div class="field"><label>lessonDurationMinutes</label><input id="bookingDuration" type="number" value="25"></div>
+                    <p>Booking v1 only supports 25-minute lessons.</p>
+                </div>
+
+                <div class="panel">
+                    <h3>Read / Cancel / Join</h3>
+                    <div class="field"><label>bookingId</label><input id="bookingId" type="number" placeholder="1"></div>
+                    <div class="field"><label>cancel reason</label><input id="bookingCancelReason" value="Schedule changed"></div>
+                    <div class="actions">
+                        <button class="secondary" data-action="getBooking">Get booking</button>
+                        <button class="secondary" data-action="joinBooking">Join status</button>
+                        <button class="danger" data-action="cancelBooking">Cancel booking</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="panel">
+                <h3>Booking result</h3>
+                <table>
+                    <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Tutor</th>
+                        <th>Slot</th>
+                        <th>Start</th>
+                        <th>Status</th>
+                        <th>Join</th>
+                    </tr>
+                    </thead>
+                    <tbody id="bookingTable">
+                    <tr><td colspan="6">No results.</td></tr>
+                    </tbody>
+                </table>
+            </div>
         </section>
 
         <section id="experts">
@@ -668,7 +787,8 @@
             refreshToken: localStorage.getItem("haru.admin.refreshToken") || "",
             me: null
         },
-        lastTutorProfileId: localStorage.getItem("haru.lastTutorProfileId") || ""
+        lastTutorProfileId: localStorage.getItem("haru.lastTutorProfileId") || "",
+        lastBookingId: localStorage.getItem("haru.lastBookingId") || ""
     };
 
     const sections = [
@@ -676,6 +796,8 @@
         ["user", "사용자"],
         ["tutor", "튜터"],
         ["admin", "관리자"],
+        ["schedule", "Schedule"],
+        ["booking", "Booking"],
         ["experts", "Experts"],
         ["scenario", "전체 시나리오"]
     ];
@@ -687,6 +809,9 @@
     function init() {
         el("apiBaseBadge").textContent = state.apiBase;
         el("adminTutorProfileId").value = state.lastTutorProfileId;
+        el("publicScheduleTutorProfileId").value = state.lastTutorProfileId;
+        el("bookingTutorProfileId").value = state.lastTutorProfileId;
+        el("bookingId").value = state.lastBookingId;
         buildNav();
         fillNewUser();
         bindActions();
@@ -830,8 +955,9 @@
             profileImageUrl: el("tutorProfileImage").value,
             introVideoUrl: el("tutorIntroVideo").value,
             thumbnailUrl: el("tutorThumbnail").value,
-            availableLanguages: complete ? el("tutorLanguages").value : "",
-            lessonPriceAmount: Number(el("tutorPrice").value),
+            availableLanguages: complete ? languagesFromInput(el("tutorLanguages").value) : [],
+            lessonPrice25Amount: Number(el("tutorPrice25").value),
+            lessonPrice50Amount: Number(el("tutorPrice50").value),
             availableTimeNote: complete ? el("tutorAvailableTime").value : "",
             paymentMethod: complete ? el("tutorPayment").value : ""
         };
@@ -842,6 +968,73 @@
         state.lastTutorProfileId = String(id);
         localStorage.setItem("haru.lastTutorProfileId", state.lastTutorProfileId);
         el("adminTutorProfileId").value = state.lastTutorProfileId;
+        el("publicScheduleTutorProfileId").value = state.lastTutorProfileId;
+        el("bookingTutorProfileId").value = state.lastTutorProfileId;
+    }
+
+    function rememberBookingId(id) {
+        if (!id) return;
+        state.lastBookingId = String(id);
+        localStorage.setItem("haru.lastBookingId", state.lastBookingId);
+        el("bookingId").value = state.lastBookingId;
+    }
+
+    function scheduleBody() {
+        return {
+            slots: el("scheduleSlots").value
+                .split(/\r?\n/)
+                .map(value => value.trim())
+                .filter(Boolean)
+                .map(startAt => ({startAt}))
+        };
+    }
+
+    function scheduleQuery() {
+        return `from=${encodeURIComponent(el("scheduleFrom").value)}&to=${encodeURIComponent(el("scheduleTo").value)}`;
+    }
+
+    function renderSchedule(slots) {
+        const tbody = el("scheduleTable");
+        if (!slots || slots.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="3">No results.</td></tr>';
+            return;
+        }
+        if (slots[0]?.id) {
+            el("bookingScheduleSlotId").value = slots[0].id;
+        }
+        tbody.innerHTML = slots.map(slot => `
+            <tr>
+                <td>${slot.id ?? ""}</td>
+                <td>${escapeHtml(slot.startAt || "")}</td>
+                <td>${escapeHtml(slot.endAt || "")}</td>
+            </tr>
+        `).join("");
+    }
+
+    function bookingBody() {
+        return {
+            tutorProfileId: Number(el("bookingTutorProfileId").value),
+            scheduleSlotId: Number(el("bookingScheduleSlotId").value),
+            lessonDurationMinutes: Number(el("bookingDuration").value)
+        };
+    }
+
+    function renderBookings(bookings) {
+        const tbody = el("bookingTable");
+        if (!bookings || bookings.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="6">No results.</td></tr>';
+            return;
+        }
+        tbody.innerHTML = bookings.map(booking => `
+            <tr>
+                <td>${booking.id ?? ""}</td>
+                <td>${booking.tutorProfileId ?? ""}</td>
+                <td>${booking.scheduleSlotId ?? ""}</td>
+                <td>${escapeHtml(booking.startAt || "")}</td>
+                <td>${escapeHtml(booking.status || "")}</td>
+                <td>${booking.joinAvailable ?? ""}</td>
+            </tr>
+        `).join("");
     }
 
     async function refreshUserMe() {
@@ -867,10 +1060,16 @@
                 <td>${item.tutorProfileId}</td>
                 <td>${escapeHtml(item.displayName || "")}</td>
                 <td>${escapeHtml(item.category || "")}</td>
-                <td>${escapeHtml(item.availableLanguages || "")}</td>
-                <td>${item.lessonPriceAmount ?? ""}</td>
+                <td>${escapeHtml((item.availableLanguages || []).join(", "))}</td>
+                <td>${item.lessonPrice25Amount ?? ""} / ${item.lessonPrice50Amount ?? ""}</td>
             </tr>
         `).join("");
+    }
+
+    function languagesFromInput(value) {
+        return value.split(",")
+            .map(language => language.trim())
+            .filter(Boolean);
     }
 
     function escapeHtml(value) {
@@ -1037,6 +1236,67 @@
                 await refreshUserMe();
             }
         },
+        fillSampleSchedule() {
+            el("scheduleSlots").value = [
+                "2026-05-20T01:00:00Z",
+                "2026-05-20T01:30:00Z",
+                "2026-05-20T02:00:00Z"
+            ].join("\n");
+            el("scheduleFrom").value = "2026-05-20T00:00:00Z";
+            el("scheduleTo").value = "2026-05-20T03:00:00Z";
+        },
+        async saveSchedule() {
+            const result = await request("PUT", "/api/tutors/me/schedule", scheduleBody(), state.user.accessToken);
+            if (result.ok) renderSchedule(result.data.data.slots);
+        },
+        async getMySchedule() {
+            const result = await request("GET", `/api/tutors/me/schedule?${scheduleQuery()}`, null, state.user.accessToken);
+            if (result.ok) renderSchedule(result.data.data.slots);
+        },
+        async getPublicSchedule() {
+            const id = el("publicScheduleTutorProfileId").value || state.lastTutorProfileId;
+            const result = await request("GET", `/api/tutors/${id}/schedule?${scheduleQuery()}`);
+            if (result.ok) renderSchedule(result.data.data.slots);
+        },
+        async testInvalidScheduleSlot() {
+            const previous = el("scheduleSlots").value;
+            el("scheduleSlots").value = "2026-05-20T01:15:00Z";
+            await actions.saveSchedule();
+            el("scheduleSlots").value = previous;
+        },
+        async testInvalidScheduleRange() {
+            const previousFrom = el("scheduleFrom").value;
+            const previousTo = el("scheduleTo").value;
+            el("scheduleFrom").value = "2026-05-20T02:00:00Z";
+            el("scheduleTo").value = "2026-05-20T02:00:00Z";
+            await actions.getMySchedule();
+            el("scheduleFrom").value = previousFrom;
+            el("scheduleTo").value = previousTo;
+        },
+        async createBooking() {
+            const result = await request("POST", "/api/bookings", bookingBody(), state.user.accessToken);
+            if (result.ok) {
+                rememberBookingId(result.data.data.id);
+                renderBookings([result.data.data]);
+            }
+        },
+        async getMyBookings() {
+            const result = await request("GET", "/api/bookings/me", null, state.user.accessToken);
+            if (result.ok) renderBookings(result.data.data.bookings);
+        },
+        async getBooking() {
+            const result = await request("GET", `/api/bookings/${el("bookingId").value}`, null, state.user.accessToken);
+            if (result.ok) renderBookings([result.data.data]);
+        },
+        async cancelBooking() {
+            const result = await request("PATCH", `/api/bookings/${el("bookingId").value}/cancel`, {
+                reason: el("bookingCancelReason").value || null
+            }, state.user.accessToken);
+            if (result.ok) renderBookings([result.data.data]);
+        },
+        async joinBooking() {
+            await request("GET", `/api/bookings/${el("bookingId").value}/join`, null, state.user.accessToken);
+        },
         async adminLogin() {
             const result = await request("POST", "/api/auth/login", {
                 email: el("adminEmail").value,
@@ -1119,11 +1379,17 @@
             await scenarioStep(rows, "프로필 저장", async () => {
                 const result = await request("PUT", "/api/tutors/me/profile", tutorProfileBody(true), state.user.accessToken);
                 expectStatus(result, 200, "save profile");
+                actions.fillSampleSchedule();
+                const scheduleResult = await request("PUT", "/api/tutors/me/schedule", scheduleBody(), state.user.accessToken);
+                expectStatus(scheduleResult, 200, "save schedule");
+                renderSchedule(scheduleResult.data.data.slots);
                 return result.data.data.status;
             });
             await scenarioStep(rows, "승인 요청", async () => {
                 const result = await request("POST", "/api/tutors/me/profile/submit", null, state.user.accessToken);
                 expectStatus(result, 200, "submit profile");
+                const publicScheduleResult = await request("GET", `/api/tutors/${profileId}/schedule?${scheduleQuery()}`);
+                expectStatus(publicScheduleResult, 404, "public schedule before approval");
                 await refreshUserMe();
                 return result.data.data.status;
             });
@@ -1154,6 +1420,9 @@
             await scenarioStep(rows, "승인 후 Experts 노출", async () => {
                 const result = await request("GET", "/api/tutors");
                 expectStatus(result, 200, "experts after approve");
+                const publicScheduleResult = await request("GET", `/api/tutors/${profileId}/schedule?${scheduleQuery()}`);
+                expectStatus(publicScheduleResult, 200, "public schedule after approval");
+                renderSchedule(publicScheduleResult.data.data.slots);
                 const found = result.data.data.some(item => item.tutorProfileId === profileId);
                 if (!found) throw new Error("APPROVED tutor not exposed");
                 return "노출 정상";

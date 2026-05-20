@@ -23,7 +23,7 @@ public class JwtTokenProvider {
 
     public JwtTokenProvider(
             @Value("${haru.jwt.secret}") String secret,
-            @Value("${haru.jwt.access-token-expiration-minutes}") long accessTokenExpirationMinutes
+            @Value("${haru.jwt.access-token-expiration-minutes:30}") long accessTokenExpirationMinutes
     ) {
         this.secretKey = Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));
         this.accessTokenExpiration = Duration.ofMinutes(accessTokenExpirationMinutes);

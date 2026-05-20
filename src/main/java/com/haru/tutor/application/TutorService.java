@@ -55,7 +55,8 @@ public class TutorService {
                 request.introVideoUrl(),
                 request.thumbnailUrl(),
                 request.availableLanguages(),
-                request.lessonPriceAmount(),
+                request.lessonPrice25Amount(),
+                request.lessonPrice50Amount(),
                 request.availableTimeNote(),
                 request.paymentMethod()
         );
@@ -89,6 +90,21 @@ public class TutorService {
                 .stream()
                 .map(ExpertListResponse::from)
                 .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public List<TutorProfileResponse> getPendingProfiles() {
+        return tutorProfileRepository.findAllByStatusOrderBySubmittedAtAsc(TutorProfileStatus.PENDING)
+                .stream()
+                .map(TutorProfileResponse::from)
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public TutorProfileResponse getApprovedProfile(Long tutorProfileId) {
+        TutorProfile profile = tutorProfileRepository.findByIdAndStatus(tutorProfileId, TutorProfileStatus.APPROVED)
+                .orElseThrow(() -> new NotFoundException("Tutor profile was not found."));
+        return TutorProfileResponse.from(profile);
     }
 
     private TutorProfile getProfileByUserId(Long userId) {

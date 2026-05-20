@@ -44,7 +44,7 @@ public class AuthService {
             RefreshTokenGenerator refreshTokenGenerator,
             TokenHasher tokenHasher,
             TutorProfileRepository tutorProfileRepository,
-            @Value("${haru.jwt.refresh-token-expiration-days}") long refreshTokenExpirationDays
+            @Value("${haru.jwt.refresh-token-expiration-days:14}") long refreshTokenExpirationDays
     ) {
         this.userAccountRepository = userAccountRepository;
         this.refreshTokenRepository = refreshTokenRepository;

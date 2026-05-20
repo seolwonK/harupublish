@@ -1,9 +1,12 @@
 package com.haru.tutor.api.dto;
 
+import com.haru.tutor.domain.TutorCategory;
 import jakarta.validation.constraints.DecimalMin;
+import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 
 import java.math.BigDecimal;
+import java.util.List;
 
 public record TutorProfileRequest(
         @Size(max = 100)
@@ -16,8 +19,7 @@ public record TutorProfileRequest(
 
         String whatIOffer,
 
-        @Size(max = 50)
-        String category,
+        TutorCategory category,
 
         @Size(max = 500)
         String profileImageUrl,
@@ -28,11 +30,14 @@ public record TutorProfileRequest(
         @Size(max = 500)
         String thumbnailUrl,
 
-        @Size(max = 255)
-        String availableLanguages,
+        @Size(max = 10)
+        List<@NotBlank @Size(max = 50) String> availableLanguages,
 
-        @DecimalMin(value = "0.0", inclusive = true)
-        BigDecimal lessonPriceAmount,
+        @DecimalMin(value = "0.01", inclusive = true)
+        BigDecimal lessonPrice25Amount,
+
+        @DecimalMin(value = "0.01", inclusive = true)
+        BigDecimal lessonPrice50Amount,
 
         @Size(max = 500)
         String availableTimeNote,

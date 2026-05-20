@@ -19,6 +19,8 @@
 | `user_roles` | 사용자에게 부여된 역할 목록 |
 | `refresh_tokens` | refresh token 저장 및 회전 이력 |
 | `tutor_profiles` | 튜터 활동 정보와 관리자 승인 상태 |
+| `tutor_schedule_slots` | 튜터 가능 시간 슬롯 |
+| `bookings` | 학생-튜터 수업 예약 |
 | `flyway_schema_history` | Flyway 마이그레이션 이력 |
 
 ## ERD 개요
@@ -27,6 +29,9 @@
 users 1 ── N user_roles
 users 1 ── N refresh_tokens
 users 1 ── 0..1 tutor_profiles
+tutor_profiles 1 ── N tutor_schedule_slots
+tutor_profiles 1 ── N bookings
+tutor_schedule_slots 1 ── 0..1 bookings
 refresh_tokens 0..1 ── 0..1 refresh_tokens
 ```
 
@@ -35,6 +40,8 @@ refresh_tokens 0..1 ── 0..1 refresh_tokens
 - 한 사용자는 여러 role을 가질 수 있다.
 - 한 사용자는 여러 refresh token 이력을 가질 수 있다.
 - 한 사용자는 최대 하나의 tutor profile만 가질 수 있다.
+- 한 tutor profile은 여러 schedule slot을 가질 수 있다.
+- 한 booking은 학생 사용자, 튜터 프로필, 스케줄 슬롯을 참조한다.
 - refresh token은 회전 시 다음 token id를 `replaced_by_token_id`로 참조할 수 있다.
 
 ## users
@@ -169,12 +176,13 @@ Refresh token 원문은 저장하지 않고 SHA-256 hash만 저장한다.
 | `short_introduction` | `VARCHAR(255)` | YES |  | 짧은 소개 |
 | `about_me` | `TEXT` | YES |  | 자기소개 |
 | `what_i_offer` | `TEXT` | YES |  | 제공 수업 설명 |
-| `category` | `VARCHAR(50)` | YES |  | 수업 카테고리 |
+| `category` | `VARCHAR(50)` | YES |  | 수업 카테고리 enum 값 |
 | `profile_image_url` | `VARCHAR(500)` | YES |  | 프로필 이미지 URL |
 | `intro_video_url` | `VARCHAR(500)` | YES |  | 소개 영상 URL |
 | `thumbnail_url` | `VARCHAR(500)` | YES |  | 썸네일 URL |
-| `available_languages` | `VARCHAR(255)` | YES |  | 가능한 언어 |
-| `lesson_price_amount` | `DECIMAL(10,2)` | YES |  | 수업 가격 |
+| `available_languages` | `VARCHAR(255)` | YES |  | 가능한 언어. API에서는 문자열 배열로 표현하고 DB에는 comma-separated 문자열로 저장 |
+| `lesson_price_25_amount` | `DECIMAL(10,2)` | YES |  | 25분 수업 가격 |
+| `lesson_price_50_amount` | `DECIMAL(10,2)` | YES |  | 50분 수업 가격 |
 | `available_time_note` | `VARCHAR(500)` | YES |  | 수업 가능 시간 설명 |
 | `payment_method` | `VARCHAR(100)` | YES |  | 지급수단 |
 | `status` | `VARCHAR(20)` | NO | INDEX | 튜터 프로필 승인 상태 |
@@ -207,6 +215,15 @@ APPROVED
 REJECTED
 ```
 
+category 값:
+
+```text
+KOREAN
+KPOP
+KBEAUTY
+OTHER
+```
+
 상태 의미:
 
 | 상태 | 의미 | Experts 노출 |
@@ -225,7 +242,8 @@ about_me
 what_i_offer
 category
 available_languages
-lesson_price_amount
+lesson_price_25_amount
+lesson_price_50_amount
 available_time_note
 payment_method
 ```
@@ -240,6 +258,77 @@ payment_method
 - 승인되면 `APPROVED`가 되고 Experts 목록에 노출된다.
 - 승인된 프로필을 수정하면 `DRAFT`로 돌아가고 Experts 목록 노출이 중단된다.
 - 반려된 프로필을 수정하면 `DRAFT`로 돌아간다.
+- 공개 상세 API `GET /api/tutors/{tutorProfileId}`는 `APPROVED` 프로필만 반환한다.
+- `intro_video_url`은 비어 있거나 YouTube URL이어야 한다.
+
+## tutor_schedule_slots
+
+튜터가 예약 가능하다고 등록한 30분 단위 UTC 슬롯을 저장한다.
+
+| 컬럼 | 타입 | NULL | 키 | 설명 |
+| --- | --- | --- | --- | --- |
+| `id` | `BIGINT` | NO | PK | 스케줄 슬롯 ID, auto increment |
+| `tutor_profile_id` | `BIGINT` | NO | FK, UNIQUE 묶음 | 튜터 프로필 ID |
+| `start_at` | `TIMESTAMP(6)` | NO | UNIQUE 묶음, INDEX | UTC 슬롯 시작 시각 |
+| `end_at` | `TIMESTAMP(6)` | NO |  | UTC 슬롯 종료 시각. 현재는 시작 시각 + 30분 |
+| `created_at` | `TIMESTAMP(6)` | NO |  | 생성 시각 |
+| `updated_at` | `TIMESTAMP(6)` | NO |  | 수정 시각 |
+
+제약조건:
+
+| 이름 | 종류 | 컬럼 |
+| --- | --- | --- |
+| `PRIMARY` | Primary Key | `id` |
+| `uk_tutor_schedule_slots_profile_start` | Unique | `tutor_profile_id, start_at` |
+| `fk_tutor_schedule_slots_profile` | Foreign Key | `tutor_profile_id -> tutor_profiles.id` |
+
+인덱스:
+
+| 이름 | 컬럼 | 목적 |
+| --- | --- | --- |
+| `idx_tutor_schedule_slots_profile_start` | `tutor_profile_id, start_at` | 튜터별 기간 조회 |
+
+현재 구현 규칙:
+
+- API는 UTC `Instant` 문자열을 입출력한다.
+- 슬롯 시작 시각은 30분 단위여야 한다.
+- `PUT /api/tutors/me/schedule`은 기존 슬롯을 요청 목록으로 전체 교체한다.
+- 공개 조회는 승인된 튜터 프로필만 허용한다.
+
+## bookings
+
+학생이 승인된 튜터의 스케줄 슬롯으로 생성한 25분 수업 예약을 저장한다.
+
+| 컬럼 | 타입 | NULL | 키 | 설명 |
+| --- | --- | --- | --- | --- |
+| `id` | `BIGINT` | NO | PK | 예약 ID, auto increment |
+| `student_user_id` | `BIGINT` | NO | FK, INDEX | 예약한 학생 사용자 ID |
+| `tutor_profile_id` | `BIGINT` | NO | FK, INDEX | 예약 대상 튜터 프로필 ID |
+| `schedule_slot_id` | `BIGINT` | NO | UNIQUE, FK | 예약한 스케줄 슬롯 ID |
+| `lesson_duration_minutes` | `INT` | NO |  | 현재 Booking v1에서는 25만 허용 |
+| `start_at` | `TIMESTAMP(6)` | NO | INDEX | 수업 시작 시각 |
+| `end_at` | `TIMESTAMP(6)` | NO |  | 수업 종료 시각 |
+| `status` | `VARCHAR(20)` | NO | INDEX | 예약 상태 |
+| `cancel_reason` | `VARCHAR(500)` | YES |  | 취소 사유 |
+| `created_at` | `TIMESTAMP(6)` | NO |  | 생성 시각 |
+| `updated_at` | `TIMESTAMP(6)` | NO |  | 수정 시각 |
+
+status 값:
+
+```text
+RESERVED
+CANCELLED
+COMPLETED
+```
+
+현재 구현 규칙:
+
+- 승인된 튜터의 슬롯만 예약할 수 있다.
+- 같은 스케줄 슬롯은 한 번만 예약할 수 있다.
+- 25분 수업만 예약할 수 있다.
+- 예약 취소는 수업 시작 3시간 전까지만 가능하다.
+- join 조회는 수업 시작 10분 전부터 `joinAvailable = true`를 반환한다.
+- 실제 Jitsi 링크는 아직 생성하지 않는다.
 
 ## Flyway 마이그레이션 이력
 
@@ -248,6 +337,10 @@ payment_method
 | V1 | `V1__auth_user_schema.sql` | users, user_roles, refresh_tokens 생성 |
 | V2 | `V2__add_user_last_login_at.sql` | users.last_login_at 추가 |
 | V3 | `V3__create_tutor_profiles.sql` | tutor_profiles 생성 |
+| V4 | `V4__structure_tutor_profile_pricing.sql` | 25분/50분 수업 가격 컬럼 추가 |
+| V5 | `V5__drop_legacy_tutor_lesson_price_amount.sql` | legacy 단일 수업 가격 컬럼 제거 |
+| V6 | `V6__create_tutor_schedule_slots.sql` | 튜터 가능 시간 슬롯 생성 |
+| V7 | `V7__create_bookings.sql` | 25분 수업 예약 테이블 생성 |
 
 ## 로컬 관리자 계정
 
