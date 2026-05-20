@@ -1,5 +1,7 @@
 # Auth First Plan
 
+> Historical planning document. 현재 구현 상태와 API 계약은 README, Swagger, API_PLANNING.md, DATABASE_SCHEMA.md를 기준으로 확인한다.
+
 ## 왜 인증 도메인을 먼저 구현해야 하는가
 
 Haru의 주요 기능은 모두 사용자 식별과 역할 판단에 의존한다. 학생은 예약과 결제를 수행하고, 튜터는 프로필과 스케줄을 등록하며, 관리자는 승인과 운영 처리를 수행한다. 같은 계정이 Student와 Tutor 역할을 모두 가질 수 있고, 화면에서는 현재 사용 중인 역할(activeRole)에 따라 메뉴와 권한이 달라진다.
@@ -223,6 +225,6 @@ Admin 권한은 일반 가입이나 튜터 전환으로 부여하지 않는다.
 - 정지 또는 탈퇴 상태 계정은 로그인과 토큰 재발급을 차단한다.
 - 시간대는 IANA timezone 문자열을 사용한다. 예: `Asia/Seoul`, `America/New_York`.
 
-## 현재 단계에서 구현하지 않는 것
+## 작성 당시 구현하지 않았던 것
 
-이 문서는 인증 도메인의 우선순위와 정책 기준만 정의한다. Spring Security 설정, JWT 클래스, User Entity, Auth Controller, Auth Service, Repository, DB 테이블은 현재 단계에서 생성하지 않는다.
+이 문서는 인증 도메인의 우선순위와 정책 기준을 먼저 정리하기 위해 작성된 초기 계획 문서다. 현재는 Spring Security 설정, JWT 클래스, User Entity, Auth Controller, Auth Service, Repository, DB 테이블이 구현되어 있으므로 현행 상태는 README와 API_PLANNING.md를 기준으로 확인한다.

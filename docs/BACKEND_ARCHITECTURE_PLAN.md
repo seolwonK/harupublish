@@ -1,8 +1,10 @@
 # Backend Architecture Plan
 
+> Historical planning document. 이 문서는 초기 아키텍처 방향을 남긴 기록이며, 현재 구현 상태와 API 계약은 README, Swagger, API_PLANNING.md, DATABASE_SCHEMA.md를 기준으로 확인한다.
+
 ## 목표
 
-이 문서는 이후 Spring Boot 백엔드 구현 시 따를 기준 디렉토리와 패키지 분리 방향을 정의한다. 현재 단계에서는 프로젝트 생성이나 Java 코드 작성을 하지 않는다.
+이 문서는 Spring Boot 백엔드 구현 시 따를 기준 디렉토리와 패키지 분리 방향을 정의했던 초기 계획 문서다. 현재는 프로젝트와 일부 Java 코드가 구현되어 있으므로 현행 상태는 README와 API_PLANNING.md를 기준으로 확인한다.
 
 ## 기준 디렉토리 구조
 
@@ -255,4 +257,3 @@ Global Exception Handler에서 HTTP status와 Haru error code를 일관되게 �
 - 사용자 프로필의 `standardTimeZone`을 표시 기준으로 사용
 - 예약 가능 시간, 예약 시작/종료 시간, 알림 예약 시간은 UTC로 계산
 - 클라이언트에는 사용자 시간대와 변환된 시간을 함께 내려주는 방향을 권장
-

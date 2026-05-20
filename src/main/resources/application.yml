@@ -1,6 +1,10 @@
 spring:
   application:
     name: haru
+  servlet:
+    multipart:
+      max-file-size: 5MB
+      max-request-size: 5MB
   datasource:
     url: jdbc:mysql://localhost:3306/haru?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
     username: haru
@@ -20,8 +24,34 @@ spring:
 server:
   port: 8080
 
+logging:
+  level:
+    root: INFO
+    com.haru: DEBUG
+    org.springframework.web: INFO
+    org.springframework.security: INFO
+
+    # SQL 쿼리 출력
+    org.hibernate.SQL: DEBUG
+
+    # SQL 파라미터 출력, Spring Boot 3 / Hibernate 6 기준
+    org.hibernate.orm.jdbc.bind: TRACE
+
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%thread] %logger{36} - %msg%n"
+
 haru:
   jwt:
     secret: "change-this-local-development-secret-key-minimum-32-bytes"
     access-token-expiration-minutes: 30
     refresh-token-expiration-days: 14
+  payments:
+    lemon-squeezy:
+      enabled: ${LEMON_SQUEEZY_ENABLED:false}
+      api-key: ${LEMON_SQUEEZY_API_KEY:}
+      store-id: ${LEMON_SQUEEZY_STORE_ID:}
+      variant-id: ${LEMON_SQUEEZY_VARIANT_ID:}
+      signing-secret: ${LEMON_SQUEEZY_SIGNING_SECRET:}
+      redirect-url: ${LEMON_SQUEEZY_REDIRECT_URL:http://localhost:3000/payments}
+      test-mode: ${LEMON_SQUEEZY_TEST_MODE:true}
+      custom-price-exchange-rate: ${LEMON_SQUEEZY_CUSTOM_PRICE_EXCHANGE_RATE:1}

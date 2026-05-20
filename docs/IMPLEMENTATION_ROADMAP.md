@@ -1,5 +1,7 @@
 # Implementation Roadmap
 
+> Target spec / roadmap document. 현재 구현 완료 여부는 README와 API_PLANNING.md의 현재 구현 API 목록을 기준으로 확인한다.
+
 ## 개발 우선순위 원칙
 
 Haru MVP는 인증된 사용자가 튜터 프로필을 보고 예약/결제/수업을 완료하는 흐름이 핵심이다. 따라서 사용자 식별과 권한 구조를 먼저 세우고, 그 위에 튜터 프로필, 스케줄, 예약, 결제/정산, 알림, 관리자 기능을 순서대로 올린다.
@@ -129,4 +131,3 @@ Haru MVP는 인증된 사용자가 튜터 프로필을 보고 예약/결제/수�
 - 이메일 발송 provider 선정
 - 영상 업로드 또는 YouTube URL 방식 중 MVP 선택
 - PayPal/Payoneer/국내 계좌 정산 운영 방식
-

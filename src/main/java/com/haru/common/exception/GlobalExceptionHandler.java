@@ -1,6 +1,8 @@
 package com.haru.common.exception;
 
 import com.haru.common.response.ErrorResponse;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
@@ -16,9 +18,15 @@ import java.util.stream.Collectors;
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
+    private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
+
     @ExceptionHandler(HaruException.class)
     public ResponseEntity<ErrorResponse> handleHaruException(HaruException exception) {
         ErrorCode errorCode = exception.getErrorCode();
+        log.warn("Handled application exception. code={}, status={}, message={}",
+                errorCode.code(),
+                errorCode.status().value(),
+                exception.getMessage());
         return ResponseEntity
                 .status(errorCode.status())
                 .body(ErrorResponse.of(errorCode.code(), exception.getMessage()));
@@ -58,6 +66,7 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ErrorResponse> handleUnexpectedException(Exception exception) {
+        log.error("Unhandled server exception", exception);
         return ResponseEntity
                 .status(HttpStatus.INTERNAL_SERVER_ERROR)
                 .body(ErrorResponse.of("INTERNAL_SERVER_ERROR", "Unexpected server error."));

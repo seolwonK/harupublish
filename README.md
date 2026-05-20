@@ -42,9 +42,11 @@ Haru 백엔드는 하나의 사용자 계정으로 학생 모드와 튜터 모�
 | Auth | 회원가입, 로그인, 로그아웃, refresh token 회전 및 재사용 차단 |
 | User | 프로필 조회/수정, 마지막 로그인 시각 기록, activeRole 변경 |
 | Tutor | 튜터 전환, 프로필 임시저장, 승인요청, 상태 관리 |
+| Schedule | 튜터 가능 시간 슬롯 저장/조회 |
+| Booking | 25분 수업 예약 생성, 내 예약 조회, 취소, 입장 가능 여부 |
 | Admin | 튜터 프로필 승인/반려 |
 | Experts | 승인된 튜터만 공개 목록에 노출 |
-| Docs | Swagger, Postman 가이드, DB 문서, README |
+| Docs | Swagger, API 계획, DB 문서, README |
 | Runtime | Docker Compose로 backend + MySQL 실행 |
 
 ## Screenshots
@@ -244,6 +246,8 @@ src/main/resources/db/seed/local
 | `user_roles` | 사용자 역할 목록 |
 | `refresh_tokens` | refresh token 저장 및 회전 관리 |
 | `tutor_profiles` | 튜터 프로필 및 승인 상태 |
+| `tutor_schedule_slots` | 튜터 가능 시간 슬롯 |
+| `bookings` | 학생-튜터 수업 예약 |
 | `flyway_schema_history` | Flyway migration 이력 |
 
 현재 마이그레이션:
@@ -253,6 +257,10 @@ src/main/resources/db/seed/local
 | `V1__auth_user_schema.sql` | 사용자, 역할, refresh token 기본 스키마 |
 | `V2__add_user_last_login_at.sql` | 마지막 로그인 시각 컬럼 추가 |
 | `V3__create_tutor_profiles.sql` | 튜터 프로필 및 승인 상태 추가 |
+| `V4__structure_tutor_profile_pricing.sql` | 25분/50분 튜터 가격 컬럼 추가 |
+| `V5__drop_legacy_tutor_lesson_price_amount.sql` | legacy 단일 가격 컬럼 제거 |
+| `V6__create_tutor_schedule_slots.sql` | 튜터 가능 시간 슬롯 추가 |
+| `V7__create_bookings.sql` | 25분 수업 예약 테이블 추가 |
 | `R__local_admin_seed.sql` | 로컬 개발용 관리자 계정 seed |
 
 Hibernate `ddl-auto`는 `validate`로 설정되어 있습니다.  
@@ -287,6 +295,25 @@ Hibernate `ddl-auto`는 `validate`로 설정되어 있습니다.
 | `PUT` | `/api/tutors/me/profile` | 내 튜터 프로필 저장 |
 | `POST` | `/api/tutors/me/profile/submit` | 튜터 프로필 승인 요청 |
 | `GET` | `/api/tutors` | 승인된 Experts 목록 조회 |
+| `GET` | `/api/tutors/{tutorProfileId}` | 승인된 Expert 상세 조회 |
+
+### Schedule
+
+| Method | Path | Description |
+| --- | --- | --- |
+| `PUT` | `/api/tutors/me/schedule` | 내 가능 시간 슬롯 전체 교체 |
+| `GET` | `/api/tutors/me/schedule` | 내 가능 시간 슬롯 조회 |
+| `GET` | `/api/tutors/{tutorProfileId}/schedule` | 승인된 튜터 가능 시간 공개 조회 |
+
+### Booking
+
+| Method | Path | Description |
+| --- | --- | --- |
+| `POST` | `/api/bookings` | 25분 수업 예약 생성 |
+| `GET` | `/api/bookings/me` | 내 예약 목록 조회 |
+| `GET` | `/api/bookings/{bookingId}` | 예약 상세 조회 |
+| `PATCH` | `/api/bookings/{bookingId}/cancel` | 예약 취소 |
+| `GET` | `/api/bookings/{bookingId}/join` | 수업 입장 가능 여부 조회 |
 
 ### Admin
 
@@ -294,15 +321,18 @@ Hibernate `ddl-auto`는 `validate`로 설정되어 있습니다.
 | --- | --- | --- |
 | `PATCH` | `/api/admin/tutors/{tutorProfileId}/approve` | 튜터 프로필 승인 |
 | `PATCH` | `/api/admin/tutors/{tutorProfileId}/reject` | 튜터 프로필 반려 |
+| `GET` | `/api/admin/tutors/pending` | 튜터 승인 대기 목록 조회 |
 
-상세 요청/응답은 Swagger UI 또는 Postman 문서를 기준으로 확인합니다.
+상세 요청/응답은 Swagger UI와 API 계획 문서를 기준으로 확인합니다.
 
 ## Project Structure
 
 ```text
 src/main/java/com/haru
 ├── auth
+├── booking
 ├── common
+├── schedule
 ├── tutor
 └── user
 
@@ -313,7 +343,7 @@ src/main/resources
 
 docs
 ├── DATABASE_SCHEMA.md
-├── POSTMAN_API_TEST_GUIDE.md
+├── API_PLANNING.md
 └── TUTOR_ROLE_AND_PROFILE_FLOW.md
 ```
 
@@ -322,16 +352,16 @@ docs
 | Document | Description |
 | --- | --- |
 | [DB 테이블 구조](docs/DATABASE_SCHEMA.md) | 테이블, 컬럼, 제약조건, 관계 |
-| [Postman API 테스트 가이드](docs/POSTMAN_API_TEST_GUIDE.md) | API 수동 테스트 절차 |
+| [API 계획](docs/API_PLANNING.md) | 현재 구현 API와 이후 구현 후보 |
 | [튜터 전환 및 activeRole 흐름](docs/TUTOR_ROLE_AND_PROFILE_FLOW.md) | 튜터 모드와 승인 상태 구분 |
+| [기획안 대비 구현 현황](docs/IMPLEMENTATION_STATUS_VS_PPT.md) | PPT 기획안 기준 구현/미구현 현황 |
 | [프로젝트 개요](docs/PROJECT_OVERVIEW.md) | 프로젝트 방향성 |
 | [백엔드 아키텍처 계획](docs/BACKEND_ARCHITECTURE_PLAN.md) | 백엔드 구조 계획 |
-| [API 계획](docs/API_PLANNING.md) | API 설계 초안 |
 | [구현 로드맵](docs/IMPLEMENTATION_ROADMAP.md) | 구현 단계 |
 
 ## Operational Notes
 
-- `/api/tutors`는 공개 API입니다.
+- `/api/tutors`, `/api/tutors/{tutorProfileId}`, `/api/tutors/{tutorProfileId}/schedule`은 승인된 튜터만 반환하는 공개 API입니다.
 - `/api/admin/**`는 `ADMIN` 권한이 필요합니다.
 - refresh token은 회전 방식입니다. 한 번 사용된 refresh token은 재사용할 수 없습니다.
 - 승인된 튜터 프로필을 수정하면 상태가 `DRAFT`로 돌아가며, 다시 승인 요청과 관리자 승인이 필요합니다.
