@@ -1,12 +1,17 @@
 .gradle/
 build/
 out/
+uploads/
 
 *.log
 
 .idea/
 *.iml
 .vscode/
+bin/
+tmp/
+
+*.tsbuildinfo
 
 .env
 .env.*
