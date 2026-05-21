@@ -13,13 +13,17 @@ import org.springframework.web.client.RestClientResponseException;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 @Component
 public class LemonSqueezyClient {
 
     public static final String PROVIDER = "LEMON_SQUEEZY";
+    private static final BigDecimal LARGE_LOCAL_PRICE_THRESHOLD = new BigDecimal("1000");
 
     private final LemonSqueezyProperties properties;
     private final ObjectMapper objectMapper;
@@ -93,6 +97,82 @@ public class LemonSqueezyClient {
         }
     }
 
+    public long toProviderMinorUnits(BigDecimal amount) {
+        return customPriceMinorUnits(amount);
+    }
+
+    public Optional<LemonSqueezyOrder> retrieveOrder(String orderId) {
+        if (!StringUtils.hasText(orderId)) {
+            return Optional.empty();
+        }
+        assertConfigured();
+
+        try {
+            String response = RestClient.builder()
+                    .baseUrl(properties.getApiBaseUrl())
+                    .defaultHeader("Authorization", "Bearer " + properties.getApiKey())
+                    .defaultHeader("Accept", "application/vnd.api+json")
+                    .defaultHeader("Content-Type", "application/vnd.api+json")
+                    .build()
+                    .get()
+                    .uri("/v1/orders/{orderId}", orderId)
+                    .retrieve()
+                    .body(String.class);
+
+            JsonNode root = objectMapper.readTree(response);
+            return Optional.of(parseOrder(root.path("data")));
+        } catch (RestClientResponseException exception) {
+            if (exception.getStatusCode().value() == 404) {
+                return Optional.empty();
+            }
+            throw providerException(exception);
+        } catch (BusinessException exception) {
+            throw exception;
+        } catch (Exception exception) {
+            throw new BusinessException(ErrorCode.INVALID_REQUEST, "Failed to verify Lemon Squeezy order state.");
+        }
+    }
+
+    public List<LemonSqueezyOrder> listOrdersByUserEmail(String userEmail) {
+        if (!StringUtils.hasText(userEmail)) {
+            return List.of();
+        }
+        assertConfigured();
+
+        try {
+            String response = RestClient.builder()
+                    .baseUrl(properties.getApiBaseUrl())
+                    .defaultHeader("Authorization", "Bearer " + properties.getApiKey())
+                    .defaultHeader("Accept", "application/vnd.api+json")
+                    .defaultHeader("Content-Type", "application/vnd.api+json")
+                    .build()
+                    .get()
+                    .uri(uriBuilder -> uriBuilder
+                            .path("/v1/orders")
+                            .queryParam("filter[user_email]", userEmail)
+                            .queryParam("page[size]", 100)
+                            .build())
+                    .retrieve()
+                    .body(String.class);
+
+            JsonNode root = objectMapper.readTree(response);
+            JsonNode data = root.path("data");
+            if (!data.isArray()) {
+                return List.of();
+            }
+
+            List<LemonSqueezyOrder> orders = new ArrayList<>();
+            data.forEach(item -> orders.add(parseOrder(item)));
+            return orders;
+        } catch (RestClientResponseException exception) {
+            throw providerException(exception);
+        } catch (BusinessException exception) {
+            throw exception;
+        } catch (Exception exception) {
+            throw new BusinessException(ErrorCode.INVALID_REQUEST, "Failed to verify Lemon Squeezy order state.");
+        }
+    }
+
     private Map<String, Object> productOptions(Payment payment) {
         String lessonName = "%d min Korean lesson x %d".formatted(payment.getLessonDurationMinutes(), payment.getLessonPackCount());
         return Map.of(
@@ -135,17 +215,79 @@ public class LemonSqueezyClient {
     }
 
     private int customPriceMinorUnits(BigDecimal amount) {
-        return amount.multiply(properties.getCustomPriceExchangeRate())
+        BigDecimal price = amount == null ? BigDecimal.ZERO : amount;
+
+        if (price.compareTo(LARGE_LOCAL_PRICE_THRESHOLD) >= 0) {
+            return price.movePointRight(2)
+                .setScale(0, RoundingMode.HALF_UP)
+                .intValueExact();
+        }
+
+        BigDecimal exchangeRate = properties.getCustomPriceExchangeRate();
+        if (exchangeRate != null && exchangeRate.compareTo(BigDecimal.ONE) > 0) {
+            return price.multiply(exchangeRate)
                 .movePointRight(2)
                 .setScale(0, RoundingMode.HALF_UP)
                 .intValueExact();
+        }
+
+        return price.movePointRight(2)
+            .setScale(0, RoundingMode.HALF_UP)
+            .intValueExact();
+    }
+
+    private LemonSqueezyOrder parseOrder(JsonNode data) {
+        JsonNode attributes = data.path("attributes");
+        JsonNode firstOrderItem = attributes.path("first_order_item");
+
+        return new LemonSqueezyOrder(
+                data.path("id").asText(null),
+                attributes.path("identifier").asText(null),
+                attributes.path("status").asText(""),
+                attributes.path("refunded").asBoolean(false),
+                attributes.path("currency").asText(null),
+                attributes.path("total").asLong(0L),
+                attributes.path("total_usd").asLong(0L),
+                String.valueOf(firstOrderItem.path("variant_id").asText("")),
+                attributes.path("test_mode").asBoolean(false),
+                Instant.parse(attributes.path("created_at").asText())
+        );
+    }
+
+    private BusinessException providerException(RestClientResponseException exception) {
+        String responseBody = exception.getResponseBodyAsString();
+        String detail = StringUtils.hasText(responseBody) ? " " + responseBody : "";
+        return new BusinessException(
+                ErrorCode.INVALID_REQUEST,
+                "Failed to verify Lemon Squeezy order state. Provider responded with "
+                        + exception.getStatusCode().value()
+                        + "."
+                        + detail
+        );
     }
 
     private void assertConfigured() {
         if (!StringUtils.hasText(properties.getApiKey())
                 || !StringUtils.hasText(properties.getStoreId())
                 || !StringUtils.hasText(properties.getVariantId())) {
-            throw new BusinessException(ErrorCode.INVALID_REQUEST, "Lemon Squeezy is enabled but API key, store ID, or variant ID is missing.");
+            throw new BusinessException(
+                    ErrorCode.INVALID_REQUEST,
+                    "Lemon Squeezy is enabled but configuration is incomplete. Provide LEMON_SQUEEZY_API_KEY, LEMON_SQUEEZY_STORE_ID, and LEMON_SQUEEZY_VARIANT_ID."
+            );
         }
+    }
+
+    public record LemonSqueezyOrder(
+            String id,
+            String identifier,
+            String status,
+            boolean refunded,
+            String currency,
+            long total,
+            long totalUsd,
+            String variantId,
+            boolean testMode,
+            Instant createdAt
+    ) {
     }
 }

@@ -10,8 +10,10 @@ import com.haru.payment.api.dto.PaymentResponse;
 import com.haru.payment.api.dto.RefundRequest;
 import com.haru.payment.domain.Payment;
 import com.haru.payment.domain.PaymentMethod;
+import com.haru.payment.domain.PaymentStatus;
 import com.haru.payment.infra.LemonSqueezyCheckout;
 import com.haru.payment.infra.LemonSqueezyClient;
+import com.haru.payment.infra.LemonSqueezyClient.LemonSqueezyOrder;
 import com.haru.payment.infra.LemonSqueezyProperties;
 import com.haru.payment.infra.PaymentRepository;
 import com.haru.tutor.domain.TutorProfile;
@@ -26,10 +28,15 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
+import java.time.Duration;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
+import java.util.Comparator;
+import java.util.List;
+import java.util.Optional;
 
 @Service
 public class PaymentService {
@@ -87,20 +94,26 @@ public class PaymentService {
         } else if (lemonSqueezyProperties.isMockPaidCheckoutEnabled()) {
             payment.markPaid();
         } else {
-            throw new BusinessException(ErrorCode.INVALID_REQUEST, "Lemon Squeezy payments are not configured.");
+            throw new BusinessException(
+                    ErrorCode.INVALID_REQUEST,
+                    "Lemon Squeezy payments are not configured. Set LEMON_SQUEEZY_ENABLED=true and provide LEMON_SQUEEZY_API_KEY, LEMON_SQUEEZY_STORE_ID, and LEMON_SQUEEZY_VARIANT_ID."
+            );
         }
 
         return PaymentResponse.from(payment);
     }
 
-    @Transactional(readOnly = true)
+    @Transactional
     public PaymentListResponse getMyPayments(Long userId) {
+        syncPendingPayments(userId);
         return PaymentListResponse.from(paymentRepository.findAllByStudentIdOrderByCreatedAtDesc(userId));
     }
 
-    @Transactional(readOnly = true)
+    @Transactional
     public PaymentResponse getPayment(Long userId, Long paymentId) {
-        return PaymentResponse.from(getPaymentWithAccess(userId, paymentId));
+        Payment payment = getPaymentWithAccess(userId, paymentId);
+        syncPaymentStatus(payment);
+        return PaymentResponse.from(payment);
     }
 
     @Transactional
@@ -169,6 +182,65 @@ public class PaymentService {
             return tutorProfile.getLessonPrice50Amount();
         }
         throw new BusinessException(ErrorCode.INVALID_REQUEST, "lessonDurationMinutes must be 25 or 50.");
+    }
+
+    private void syncPendingPayments(Long userId) {
+        List<Payment> pendingPayments = paymentRepository.findAllByStudentIdAndStatusOrderByCreatedAtDesc(userId, PaymentStatus.PENDING);
+        if (pendingPayments.isEmpty()) {
+            return;
+        }
+
+        List<LemonSqueezyOrder> userOrders = lemonSqueezyClient.listOrdersByUserEmail(pendingPayments.get(0).getStudent().getEmail());
+        pendingPayments.forEach(payment -> syncPaymentStatus(payment, userOrders));
+    }
+
+    private void syncPaymentStatus(Payment payment) {
+        syncPaymentStatus(payment, lemonSqueezyClient.listOrdersByUserEmail(payment.getStudent().getEmail()));
+    }
+
+    private void syncPaymentStatus(Payment payment, List<LemonSqueezyOrder> userOrders) {
+        if (payment.getStatus() != PaymentStatus.PENDING || payment.getPaymentMethod() != PaymentMethod.LEMON_SQUEEZY) {
+            return;
+        }
+
+        Optional<LemonSqueezyOrder> matchedOrder = StringUtils.hasText(payment.getProviderOrderId())
+                ? lemonSqueezyClient.retrieveOrder(payment.getProviderOrderId())
+                : findMatchingOrder(payment, userOrders);
+
+        matchedOrder.ifPresent(order -> applyProviderOrder(payment, order));
+    }
+
+    private Optional<LemonSqueezyOrder> findMatchingOrder(Payment payment, List<LemonSqueezyOrder> userOrders) {
+        long expectedProviderTotal = lemonSqueezyClient.toProviderMinorUnits(payment.getTotalAmount());
+        String expectedVariantId = lemonSqueezyProperties.getVariantId();
+        boolean testMode = lemonSqueezyProperties.isTestMode();
+
+        return userOrders.stream()
+                .filter(order -> order.testMode() == testMode)
+                .filter(order -> expectedVariantId.equals(order.variantId()))
+                .filter(order -> !order.createdAt().isBefore(payment.getCreatedAt().minus(Duration.ofMinutes(2))))
+                .filter(order -> matchesExpectedTotal(order, expectedProviderTotal))
+                .filter(order -> !StringUtils.hasText(order.id()) || !paymentRepository.existsByProviderOrderIdAndIdNot(order.id(), payment.getId()))
+                .sorted(Comparator.comparing(LemonSqueezyOrder::createdAt))
+                .findFirst();
+    }
+
+    private boolean matchesExpectedTotal(LemonSqueezyOrder order, long expectedProviderTotal) {
+        return Math.abs(order.total() - expectedProviderTotal) <= 1000L;
+    }
+
+    private void applyProviderOrder(Payment payment, LemonSqueezyOrder order) {
+        if (order.refunded() || "refunded".equalsIgnoreCase(order.status()) || "partial_refund".equalsIgnoreCase(order.status())) {
+            payment.markRefundedByProvider(order.id(), order.identifier());
+            return;
+        }
+        if ("paid".equalsIgnoreCase(order.status())) {
+            payment.markPaidByProvider(order.id(), order.identifier());
+            return;
+        }
+        if ("failed".equalsIgnoreCase(order.status()) || "fraudulent".equalsIgnoreCase(order.status())) {
+            payment.markFailed();
+        }
     }
 
     private void verifyLemonSqueezySignature(String signature, String rawBody) {

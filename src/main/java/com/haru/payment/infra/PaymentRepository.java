@@ -17,6 +17,11 @@ public interface PaymentRepository extends JpaRepository<Payment, Long> {
     List<Payment> findAllByStudentIdOrderByCreatedAtDesc(Long studentId);
 
     @EntityGraph(attributePaths = {"student", "tutorProfile", "tutorProfile.user"})
+    List<Payment> findAllByStudentIdAndStatusOrderByCreatedAtDesc(Long studentId, PaymentStatus status);
+
+    boolean existsByProviderOrderIdAndIdNot(String providerOrderId, Long id);
+
+    @EntityGraph(attributePaths = {"student", "tutorProfile", "tutorProfile.user"})
     List<Payment> findAllByStudentIdAndTutorProfileIdAndLessonDurationMinutesAndStatusOrderByCreatedAtAsc(
             Long studentId,
             Long tutorProfileId,
