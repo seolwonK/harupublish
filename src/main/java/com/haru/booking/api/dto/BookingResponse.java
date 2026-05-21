@@ -9,6 +9,9 @@ public record BookingResponse(
         Long id,
         Long studentUserId,
         Long tutorProfileId,
+    String tutorDisplayName,
+    String tutorShortIntroduction,
+    String tutorImageUrl,
         Long scheduleSlotId,
         Integer lessonDurationMinutes,
         Instant startAt,
@@ -23,6 +26,9 @@ public record BookingResponse(
                 booking.getId(),
                 booking.getStudent().getId(),
                 booking.getTutorProfile().getId(),
+            booking.getTutorProfile().getDisplayName(),
+            booking.getTutorProfile().getShortIntroduction(),
+            preferredTutorImage(booking),
                 booking.getScheduleSlot().getId(),
                 booking.getLessonDurationMinutes(),
                 booking.getStartAt(),
@@ -31,5 +37,12 @@ public record BookingResponse(
                 booking.getCancelReason(),
                 booking.isJoinAvailable(now)
         );
+    }
+
+    private static String preferredTutorImage(Booking booking) {
+        if (booking.getTutorProfile().getThumbnailUrl() != null && !booking.getTutorProfile().getThumbnailUrl().isBlank()) {
+            return booking.getTutorProfile().getThumbnailUrl();
+        }
+        return booking.getTutorProfile().getProfileImageUrl();
     }
 }

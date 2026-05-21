@@ -21,3 +21,6 @@ haru:
     secret: "test-secret-key-with-at-least-thirty-two-bytes"
     access-token-expiration-minutes: 30
     refresh-token-expiration-days: 14
+  payments:
+    lemon-squeezy:
+      mock-paid-checkout-enabled: true

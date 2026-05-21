@@ -1,8 +1,8 @@
 "use client";
 
-import { CalendarDays, CheckCircle2, Clock, Globe2, MapPin, MessageCircle, Play, ShieldCheck, Video } from "lucide-react";
+import { CalendarDays, CheckCircle2, Globe2, MapPin, MessageCircle, Play, ShieldCheck, Video } from "lucide-react";
 import { use, useEffect, useMemo, useState } from "react";
-import { dateRangeFromToday, haruApi, PaymentMethod, ScheduleSlotResponse, toMoney, TutorProfileResponse } from "../../api";
+import { dateRangeFromToday, HaruApiError, haruApi, ScheduleSlotResponse, toMoney, TutorProfileResponse } from "../../api";
 import { useAuth } from "../../auth";
 import { ApiNotice, Avatar, Badge, Button, categoryLabel, EmptyState, IconMeta, Rating, SectionHeader, TimePill, TutorPortrait } from "../../components";
 import { reviews, tutors } from "../../data";
@@ -22,11 +22,8 @@ export default function TutorProfilePage({ params }: { params: Promise<{ id: str
   const [tutor, setTutor] = useState<TutorProfileResponse | null>(null);
   const [slots, setSlots] = useState<ScheduleSlotResponse[]>([]);
   const [selectedSlotId, setSelectedSlotId] = useState<number | null>(null);
-  const [lessonPackCount, setLessonPackCount] = useState(1);
-  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("CARD");
   const [loading, setLoading] = useState(Number.isFinite(numericId));
-  const [bookingLoading, setBookingLoading] = useState(false);
-  const [checkoutLoading, setCheckoutLoading] = useState(false);
+  const [actionLoading, setActionLoading] = useState(false);
   const [createdBookingId, setCreatedBookingId] = useState<number | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -57,39 +54,7 @@ export default function TutorProfilePage({ params }: { params: Promise<{ id: str
   const slotDates = useMemo(() => Array.from(new Set(slots.map((slot) => formatDate(slot.startAt)))).slice(0, 6), [slots]);
   const unitPrice = tutor?.lessonPrice25Amount;
 
-  async function createCheckout() {
-    if (!accessToken) {
-      setError("결제를 진행하려면 먼저 로그인해 주세요.");
-      return;
-    }
-    if (!tutor?.id) {
-      setError("튜터 정보를 먼저 불러와야 합니다.");
-      return;
-    }
-
-    setError(null);
-    setMessage(null);
-    setCheckoutLoading(true);
-    try {
-      const payment = await haruApi.createCheckout(accessToken, {
-        tutorProfileId: tutor.id,
-        lessonDurationMinutes: 25,
-        lessonPackCount,
-        paymentMethod
-      });
-      if (payment.checkoutUrl) {
-        window.location.href = payment.checkoutUrl;
-        return;
-      }
-      setMessage(`결제가 완료되었습니다. 결제 ID ${payment.id}, 총액 ${toMoney(payment.totalAmount)}. 이제 시간을 선택해 예약할 수 있습니다.`);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "결제 요청 생성에 실패했습니다.");
-    } finally {
-      setCheckoutLoading(false);
-    }
-  }
-
-  async function createBooking() {
+  async function payAndBook() {
     if (!accessToken) {
       setError("수업을 예약하려면 먼저 로그인해 주세요.");
       return;
@@ -101,7 +66,7 @@ export default function TutorProfilePage({ params }: { params: Promise<{ id: str
 
     setError(null);
     setMessage(null);
-    setBookingLoading(true);
+    setActionLoading(true);
     try {
       const booking = await haruApi.createBooking(accessToken, {
         tutorProfileId: tutor.id,
@@ -111,9 +76,32 @@ export default function TutorProfilePage({ params }: { params: Promise<{ id: str
       setCreatedBookingId(booking.id);
       setMessage("예약이 완료되었습니다. 내 예약에서 수업방을 열 수 있습니다.");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "예약 생성에 실패했습니다.");
+      const needsPayment = err instanceof HaruApiError
+        && err.code === "INVALID_REQUEST"
+        && err.message.includes("Complete payment for this tutor before booking a lesson.");
+
+      if (!needsPayment) {
+        setError(err instanceof Error ? err.message : "예약 생성에 실패했습니다.");
+        return;
+      }
+
+      try {
+        const payment = await haruApi.createCheckout(accessToken, {
+          tutorProfileId: tutor.id,
+          lessonDurationMinutes: 25,
+          lessonPackCount: 1,
+          paymentMethod: "LEMON_SQUEEZY"
+        });
+        if (payment.checkoutUrl) {
+          window.location.href = payment.checkoutUrl;
+          return;
+        }
+        setMessage(`결제가 확인되었습니다. 결제 ID ${payment.id}. 같은 버튼을 다시 누르면 예약됩니다.`);
+      } catch (paymentError) {
+        setError(paymentError instanceof Error ? paymentError.message : "결제 요청 생성에 실패했습니다.");
+      }
     } finally {
-      setBookingLoading(false);
+      setActionLoading(false);
     }
   }
 
@@ -193,7 +181,7 @@ export default function TutorProfilePage({ params }: { params: Promise<{ id: str
         </div>
 
         <aside className="booking-panel panel" id="booking">
-          <SectionHeader eyebrow="Booking" title="25분 수업 예약" description="먼저 결제를 완료한 뒤 가능한 시간을 골라 예약합니다." />
+          <SectionHeader eyebrow="Booking" title="25분 수업 예약" description="남은 결제 회차가 있으면 바로 예약되고, 없으면 Lemon Squeezy 결제창으로 이동합니다." />
 
           <div className="booking-step-card">
             <span>1</span>
@@ -232,35 +220,18 @@ export default function TutorProfilePage({ params }: { params: Promise<{ id: str
             <strong>{toMoney(unitPrice)}</strong>
           </div>
 
-          <Button className="wide booking-primary-cta" onClick={() => void createBooking()} disabled={bookingLoading || !selectedSlotId}>
-            <CheckCircle2 size={16} /> {bookingLoading ? "예약 중..." : "결제 완료 후 예약하기"}
+          <Button className="wide booking-primary-cta" onClick={() => void payAndBook()} disabled={actionLoading || !selectedSlotId}>
+            <CheckCircle2 size={16} /> {actionLoading ? "진행 중..." : "Lemon Squeezy로 결제 및 예약"}
           </Button>
+
           {createdBookingId ? (
             <Button as="a" href="/bookings" variant="secondary" className="wide">
               내 예약으로 이동
             </Button>
           ) : null}
 
-          <hr />
-          <SectionHeader eyebrow="Payment" title="패키지 결제" description="결제 완료된 회차 수만큼 같은 튜터 수업을 예약할 수 있습니다." />
-          <div className="package-grid">
-            {[1, 5, 10].map((count) => (
-              <button className={lessonPackCount === count ? "selected" : ""} key={count} onClick={() => setLessonPackCount(count)}>
-                {count}회
-              </button>
-            ))}
-          </div>
-          <select className="date-select" value={paymentMethod} onChange={(event) => setPaymentMethod(event.target.value as PaymentMethod)}>
-            <option value="LEMON_SQUEEZY">Lemon Squeezy</option>
-            <option value="CARD">Card</option>
-            <option value="PAYPAL">PayPal</option>
-            <option value="SIMPLE_PAY">Simple Pay</option>
-          </select>
-          <Button className="wide" variant="secondary" onClick={() => void createCheckout()} disabled={checkoutLoading}>
-            {checkoutLoading ? "결제 준비 중..." : "패키지 결제하기"}
-          </Button>
           <p className="notice">
-            <ShieldCheck size={14} /> 수업 시작 10분 전부터 내 예약에서 Jitsi 수업방에 입장할 수 있습니다.
+            <ShieldCheck size={14} /> Lemon Squeezy 결제가 끝나면 같은 버튼으로 예약을 완료하고, 수업 시작 10분 전부터 내 예약에서 Jitsi 수업방에 입장할 수 있습니다.
           </p>
         </aside>
       </section>

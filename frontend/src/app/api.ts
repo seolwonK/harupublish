@@ -106,6 +106,9 @@ export type BookingResponse = {
   id: number;
   studentUserId: number;
   tutorProfileId: number;
+  tutorDisplayName: string | null;
+  tutorShortIntroduction: string | null;
+  tutorImageUrl: string | null;
   scheduleSlotId: number;
   lessonDurationMinutes: number;
   startAt: string;

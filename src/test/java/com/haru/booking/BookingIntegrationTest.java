@@ -76,6 +76,8 @@ class BookingIntegrationTest {
                                 """.formatted(tutorProfileId, scheduleSlotId)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.tutorProfileId").value(tutorProfileId))
+                .andExpect(jsonPath("$.data.tutorDisplayName").value("Booking Korean Expert"))
+                .andExpect(jsonPath("$.data.tutorShortIntroduction").value("Practical Korean lessons for work and travel."))
                 .andExpect(jsonPath("$.data.scheduleSlotId").value(scheduleSlotId))
                 .andExpect(jsonPath("$.data.lessonDurationMinutes").value(25))
                 .andExpect(jsonPath("$.data.status").value("RESERVED"))
@@ -318,7 +320,7 @@ class BookingIntegrationTest {
                                                                                                                                         "tutorProfileId": %d,
                                                                                                                                         "lessonDurationMinutes": 25,
                                                                                                                                         "lessonPackCount": 1,
-                                                                                                                                        "paymentMethod": "CARD"
+                                                                                                                                        "paymentMethod": "LEMON_SQUEEZY"
                                                                                                                                 }
                                                                                                                                 """.formatted(tutorProfileId)))
                                                                 .andExpect(status().isOk())

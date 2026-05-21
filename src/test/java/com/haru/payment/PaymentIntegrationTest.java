@@ -54,7 +54,7 @@ class PaymentIntegrationTest {
         String response = mockMvc.perform(post("/api/payments/checkout")
                         .header("Authorization", auth(studentToken))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(checkoutJson(tutorProfileId, 25, 1, "CARD")))
+                        .content(checkoutJson(tutorProfileId, 25, 1, "LEMON_SQUEEZY")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.studentUserId").exists())
                 .andExpect(jsonPath("$.data.tutorProfileId").value(tutorProfileId))
@@ -66,7 +66,7 @@ class PaymentIntegrationTest {
                 .andExpect(jsonPath("$.data.studentFeeAmount").value(5.00))
                 .andExpect(jsonPath("$.data.totalAmount").value(105.00))
                 .andExpect(jsonPath("$.data.currency").value("USD"))
-                .andExpect(jsonPath("$.data.paymentMethod").value("CARD"))
+                .andExpect(jsonPath("$.data.paymentMethod").value("LEMON_SQUEEZY"))
                 .andExpect(jsonPath("$.data.status").value("PAID"))
                 .andReturn()
                 .getResponse()
@@ -94,7 +94,7 @@ class PaymentIntegrationTest {
         mockMvc.perform(post("/api/payments/checkout")
                         .header("Authorization", auth(studentToken))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(checkoutJson(tutorProfileId, 25, 5, "PAYPAL")))
+                        .content(checkoutJson(tutorProfileId, 25, 5, "LEMON_SQUEEZY")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.subtotalAmount").value(500.00))
                 .andExpect(jsonPath("$.data.discountAmount").value(25.00))
@@ -104,7 +104,7 @@ class PaymentIntegrationTest {
         mockMvc.perform(post("/api/payments/checkout")
                         .header("Authorization", auth(studentToken))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(checkoutJson(tutorProfileId, 25, 10, "SIMPLE_PAY")))
+                        .content(checkoutJson(tutorProfileId, 25, 10, "LEMON_SQUEEZY")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.subtotalAmount").value(1000.00))
                 .andExpect(jsonPath("$.data.discountAmount").value(100.00))
@@ -114,7 +114,7 @@ class PaymentIntegrationTest {
         mockMvc.perform(post("/api/payments/checkout")
                         .header("Authorization", auth(studentToken))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(checkoutJson(tutorProfileId, 50, 1, "CARD")))
+                        .content(checkoutJson(tutorProfileId, 50, 1, "LEMON_SQUEEZY")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.unitAmount").value(180.00))
                 .andExpect(jsonPath("$.data.totalAmount").value(189.00));
@@ -130,7 +130,7 @@ class PaymentIntegrationTest {
         mockMvc.perform(post("/api/payments/checkout")
                         .header("Authorization", auth(studentToken))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(checkoutJson(tutorProfileId, 25, 1, "CARD")))
+                        .content(checkoutJson(tutorProfileId, 25, 1, "LEMON_SQUEEZY")))
                 .andExpect(status().isNotFound());
 
         submitAndApproveTutorProfile(tutorToken, tutorProfileId);
@@ -138,14 +138,21 @@ class PaymentIntegrationTest {
         mockMvc.perform(post("/api/payments/checkout")
                         .header("Authorization", auth(studentToken))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(checkoutJson(tutorProfileId, 30, 1, "CARD")))
+                        .content(checkoutJson(tutorProfileId, 30, 1, "LEMON_SQUEEZY")))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.error.code").value("INVALID_REQUEST"));
 
         mockMvc.perform(post("/api/payments/checkout")
                         .header("Authorization", auth(studentToken))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(checkoutJson(tutorProfileId, 25, 3, "CARD")))
+                        .content(checkoutJson(tutorProfileId, 25, 3, "LEMON_SQUEEZY")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error.code").value("INVALID_REQUEST"));
+
+        mockMvc.perform(post("/api/payments/checkout")
+                        .header("Authorization", auth(studentToken))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(checkoutJson(tutorProfileId, 25, 1, "CARD")))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.error.code").value("INVALID_REQUEST"));
 
@@ -159,14 +166,14 @@ class PaymentIntegrationTest {
         mockMvc.perform(post("/api/payments/checkout")
                         .header("Authorization", auth(tutorToken))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(checkoutJson(tutorProfileId, 25, 1, "CARD")))
+                        .content(checkoutJson(tutorProfileId, 25, 1, "LEMON_SQUEEZY")))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.error.code").value("INVALID_REQUEST"));
 
         String paymentResponse = mockMvc.perform(post("/api/payments/checkout")
                         .header("Authorization", auth(studentToken))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(checkoutJson(tutorProfileId, 25, 1, "CARD")))
+                        .content(checkoutJson(tutorProfileId, 25, 1, "LEMON_SQUEEZY")))
                 .andExpect(status().isOk())
                 .andReturn()
                 .getResponse()
@@ -262,7 +269,7 @@ class PaymentIntegrationTest {
         String response = mockMvc.perform(post("/api/payments/checkout")
                         .header("Authorization", auth(studentToken))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(checkoutJson(tutorProfileId, 25, 1, "CARD")))
+                        .content(checkoutJson(tutorProfileId, 25, 1, "LEMON_SQUEEZY")))
                 .andExpect(status().isOk())
                 .andReturn()
                 .getResponse()
@@ -279,7 +286,7 @@ class PaymentIntegrationTest {
                                 25,
                                 1,
                                 tutorProfile.getLessonPrice25Amount(),
-                                PaymentMethod.CARD
+                        PaymentMethod.LEMON_SQUEEZY
                 );
                 return paymentRepository.save(payment).getId();
         }

@@ -59,6 +59,10 @@ public class PaymentService {
 
     @Transactional
     public PaymentResponse checkout(Long studentUserId, CreateCheckoutRequest request) {
+        if (request.paymentMethod() != PaymentMethod.LEMON_SQUEEZY) {
+            throw new BusinessException(ErrorCode.INVALID_REQUEST, "Only Lemon Squeezy is supported for payments right now.");
+        }
+
         UserAccount student = userAccountRepository.findWithRolesById(studentUserId)
                 .orElseThrow(() -> new NotFoundException("User was not found."));
         TutorProfile tutorProfile = tutorProfileRepository.findByIdAndStatus(request.tutorProfileId(), TutorProfileStatus.APPROVED)
@@ -68,21 +72,22 @@ public class PaymentService {
             throw new BusinessException(ErrorCode.INVALID_REQUEST, "Tutors cannot buy their own lesson packs.");
         }
 
-        PaymentMethod paymentMethod = lemonSqueezyClient.isEnabled() ? PaymentMethod.LEMON_SQUEEZY : request.paymentMethod();
         Payment payment = paymentRepository.save(Payment.checkout(
                 student,
                 tutorProfile,
                 request.lessonDurationMinutes(),
                 request.lessonPackCount(),
                 unitAmount(tutorProfile, request.lessonDurationMinutes()),
-                paymentMethod
+                PaymentMethod.LEMON_SQUEEZY
         ));
 
         if (lemonSqueezyClient.isEnabled()) {
             LemonSqueezyCheckout checkout = lemonSqueezyClient.createCheckout(payment);
             payment.attachCheckout(LemonSqueezyClient.PROVIDER, checkout.id(), checkout.url());
-        } else {
+        } else if (lemonSqueezyProperties.isMockPaidCheckoutEnabled()) {
             payment.markPaid();
+        } else {
+            throw new BusinessException(ErrorCode.INVALID_REQUEST, "Lemon Squeezy payments are not configured.");
         }
 
         return PaymentResponse.from(payment);

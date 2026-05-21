@@ -1,10 +1,10 @@
 "use client";
 
-import { ArrowRight, BookOpenCheck, CalendarClock, Clock, Home, Search, Video, XCircle } from "lucide-react";
+import { ArrowRight, BookOpenCheck, Clock, Home, Search, Video } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { BookingResponse, haruApi } from "../api";
 import { useAuth } from "../auth";
-import { ApiNotice, AppHeader, Badge, Button, EmptyState, SectionHeader, StatCard } from "../components";
+import { ApiNotice, AppHeader, Badge, Button, EmptyState, SectionHeader, StatCard, TutorPortrait } from "../components";
 
 function formatDateTime(value: string) {
   const date = new Date(value);
@@ -22,6 +22,14 @@ function statusLabel(status: BookingResponse["status"]) {
 
 function canCancel(booking: BookingResponse) {
   return booking.status === "RESERVED" && new Date().getTime() < new Date(booking.startAt).getTime() - 3 * 60 * 60 * 1000;
+}
+
+function tutorDisplayName(booking: BookingResponse) {
+  return booking.tutorDisplayName?.trim() || `튜터 #${booking.tutorProfileId}`;
+}
+
+function tutorSubtitle(booking: BookingResponse) {
+  return booking.tutorShortIntroduction?.trim() || "1:1 한국어 수업이 준비되어 있습니다.";
 }
 
 export default function BookingsPage() {
@@ -147,8 +155,9 @@ function NextLessonCard({ booking }: { booking: BookingResponse }) {
         <Badge tone={booking.joinAvailable ? "green" : "orange"}>{booking.joinAvailable ? "입장 가능" : "예약 완료"}</Badge>
         <h2>다음 수업</h2>
         <p>
-          튜터 #{booking.tutorProfileId} · {date} {time} · {booking.lessonDurationMinutes}분
+          {tutorDisplayName(booking)} · {date} {time} · {booking.lessonDurationMinutes}분
         </p>
+        <span>{tutorSubtitle(booking)}</span>
       </div>
       <div className="next-lesson-actions">
         <Button as="a" href={`/bookings/${booking.id}/classroom`}>
@@ -168,13 +177,14 @@ function BookingCard({ booking, onCancel }: { booking: BookingResponse; onCancel
   return (
     <article className="lesson-booking-card">
       <div className="lesson-booking-icon">
-        {isReserved ? <Video size={20} /> : booking.status === "CANCELLED" ? <XCircle size={20} /> : <CalendarClock size={20} />}
+        <TutorPortrait imageUrl={booking.tutorImageUrl} label={tutorDisplayName(booking).slice(0, 1)} />
       </div>
       <div className="lesson-booking-main">
         <div className="lesson-booking-title-row">
-          <strong>튜터 #{booking.tutorProfileId}</strong>
+          <strong>{tutorDisplayName(booking)}</strong>
           <Badge tone={booking.status === "COMPLETED" ? "blue" : booking.status === "CANCELLED" ? "red" : "green"}>{statusLabel(booking.status)}</Badge>
         </div>
+        <p>{tutorSubtitle(booking)}</p>
         <p>
           {date} {time} · {booking.lessonDurationMinutes}분
         </p>

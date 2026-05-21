@@ -17,6 +17,7 @@ public class LemonSqueezyProperties {
     private String redirectUrl;
     private String apiBaseUrl = "https://api.lemonsqueezy.com";
     private boolean testMode = true;
+    private boolean mockPaidCheckoutEnabled;
     private BigDecimal customPriceExchangeRate = BigDecimal.ONE;
 
     public boolean isEnabled() {
@@ -81,6 +82,14 @@ public class LemonSqueezyProperties {
 
     public void setTestMode(boolean testMode) {
         this.testMode = testMode;
+    }
+
+    public boolean isMockPaidCheckoutEnabled() {
+        return mockPaidCheckoutEnabled;
+    }
+
+    public void setMockPaidCheckoutEnabled(boolean mockPaidCheckoutEnabled) {
+        this.mockPaidCheckoutEnabled = mockPaidCheckoutEnabled;
     }
 
     public BigDecimal getCustomPriceExchangeRate() {
