@@ -12,6 +12,10 @@ bin/
 tmp/
 
 *.tsbuildinfo
+/GmarketSansTTFBold.ttf
+/GmarketSansTTFLight.ttf
+/GmarketSansTTFMedium.ttf
+/haru_logo.png
 
 .env
 .env.*
