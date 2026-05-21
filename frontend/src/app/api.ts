@@ -119,6 +119,8 @@ export type BookingListResponse = {
   bookings: BookingResponse[];
 };
 
+export type BookingParticipant = "student" | "tutor";
+
 export type BookingJoinResponse = {
   bookingId: number;
   joinAvailable: boolean;
@@ -331,8 +333,8 @@ export const haruApi = {
   createBooking(token: string, body: { tutorProfileId: number; scheduleSlotId: number; lessonDurationMinutes: number }) {
     return apiRequest<BookingResponse>("/api/bookings", { method: "POST", token, body });
   },
-  getMyBookings(token: string) {
-    return apiRequest<BookingListResponse>("/api/bookings/me", { token });
+  getMyBookings(token: string, participant: BookingParticipant = "student") {
+    return apiRequest<BookingListResponse>("/api/bookings/me", { token, query: { participant } });
   },
   getBooking(token: string, bookingId: number) {
     return apiRequest<BookingResponse>(`/api/bookings/${bookingId}`, { token });

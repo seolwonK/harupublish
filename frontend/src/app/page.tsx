@@ -200,7 +200,7 @@ export default function HomePage() {
 
     setPrivateLoading(true);
     setPrivateError(null);
-    Promise.all([haruApi.getMyBookings(accessToken), haruApi.getMyPayments(accessToken)])
+    Promise.all([haruApi.getMyBookings(accessToken, "student"), haruApi.getMyPayments(accessToken)])
       .then(([bookingResponse, paymentResponse]) => {
         setBookings(bookingResponse.bookings ?? []);
         setPayments(paymentResponse.payments ?? []);

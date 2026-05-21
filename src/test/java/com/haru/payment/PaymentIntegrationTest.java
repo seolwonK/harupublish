@@ -3,7 +3,10 @@ package com.haru.payment;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.haru.payment.domain.Payment;
+import com.haru.payment.domain.PaymentMethod;
 import com.haru.payment.infra.PaymentRepository;
+import com.haru.tutor.domain.TutorProfile;
+import com.haru.tutor.infra.TutorProfileRepository;
 import com.haru.user.domain.Role;
 import com.haru.user.domain.UserAccount;
 import com.haru.user.infra.UserAccountRepository;
@@ -39,6 +42,9 @@ class PaymentIntegrationTest {
     @Autowired
     PaymentRepository paymentRepository;
 
+        @Autowired
+        TutorProfileRepository tutorProfileRepository;
+
     @Test
     void studentCanCreateCheckoutAndReadOwnPayments() throws Exception {
         String tutorToken = signupAndGetAccessToken("payment-tutor@example.com");
@@ -61,7 +67,7 @@ class PaymentIntegrationTest {
                 .andExpect(jsonPath("$.data.totalAmount").value(105.00))
                 .andExpect(jsonPath("$.data.currency").value("USD"))
                 .andExpect(jsonPath("$.data.paymentMethod").value("CARD"))
-                .andExpect(jsonPath("$.data.status").value("PENDING"))
+                .andExpect(jsonPath("$.data.status").value("PAID"))
                 .andReturn()
                 .getResponse()
                 .getContentAsString();
@@ -179,7 +185,7 @@ class PaymentIntegrationTest {
         long tutorProfileId = createApprovedTutor(tutorToken);
         String studentToken = signupAndGetAccessToken("payment-refund-student@example.com");
 
-        long pendingPaymentId = createCheckout(studentToken, tutorProfileId);
+        long pendingPaymentId = createPendingCheckout("payment-refund-student@example.com", tutorProfileId);
         mockMvc.perform(post("/api/payments/%d/refund-request".formatted(pendingPaymentId))
                         .header("Authorization", auth(studentToken))
                         .contentType(MediaType.APPLICATION_JSON)
@@ -263,6 +269,20 @@ class PaymentIntegrationTest {
                 .getContentAsString();
         return objectMapper.readTree(response).get("data").get("id").asLong();
     }
+
+        private long createPendingCheckout(String studentEmail, long tutorProfileId) {
+                UserAccount student = userAccountRepository.findByEmail(studentEmail).orElseThrow();
+                TutorProfile tutorProfile = tutorProfileRepository.findById(tutorProfileId).orElseThrow();
+                Payment payment = Payment.checkout(
+                                student,
+                                tutorProfile,
+                                25,
+                                1,
+                                tutorProfile.getLessonPrice25Amount(),
+                                PaymentMethod.CARD
+                );
+                return paymentRepository.save(payment).getId();
+        }
 
     private String checkoutJson(long tutorProfileId, int lessonDurationMinutes, int lessonPackCount, String paymentMethod) {
         return """

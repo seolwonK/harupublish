@@ -14,6 +14,9 @@ import com.haru.common.exception.ForbiddenException;
 import com.haru.common.exception.NotFoundException;
 import com.haru.meeting.application.JitsiRoomNameGenerator;
 import com.haru.meeting.application.JitsiTokenService;
+import com.haru.payment.domain.Payment;
+import com.haru.payment.domain.PaymentStatus;
+import com.haru.payment.infra.PaymentRepository;
 import com.haru.schedule.domain.TutorScheduleSlot;
 import com.haru.schedule.infra.TutorScheduleSlotRepository;
 import com.haru.tutor.domain.TutorProfile;
@@ -35,6 +38,7 @@ public class BookingService {
     private final TutorProfileRepository tutorProfileRepository;
     private final TutorScheduleSlotRepository tutorScheduleSlotRepository;
     private final BookingRepository bookingRepository;
+    private final PaymentRepository paymentRepository;
     private final JitsiRoomNameGenerator jitsiRoomNameGenerator;
     private final JitsiTokenService jitsiTokenService;
 
@@ -43,6 +47,7 @@ public class BookingService {
             TutorProfileRepository tutorProfileRepository,
             TutorScheduleSlotRepository tutorScheduleSlotRepository,
             BookingRepository bookingRepository,
+            PaymentRepository paymentRepository,
             JitsiRoomNameGenerator jitsiRoomNameGenerator,
             JitsiTokenService jitsiTokenService
     ) {
@@ -50,6 +55,7 @@ public class BookingService {
         this.tutorProfileRepository = tutorProfileRepository;
         this.tutorScheduleSlotRepository = tutorScheduleSlotRepository;
         this.bookingRepository = bookingRepository;
+        this.paymentRepository = paymentRepository;
         this.jitsiRoomNameGenerator = jitsiRoomNameGenerator;
         this.jitsiTokenService = jitsiTokenService;
     }
@@ -75,6 +81,7 @@ public class BookingService {
         if (bookingRepository.existsByScheduleSlotIdAndStatus(slot.getId(), BookingStatus.RESERVED)) {
             throw new BusinessException(ErrorCode.INVALID_REQUEST, "Schedule slot is already booked.");
         }
+        ensureRemainingLessonCredit(student.getId(), tutorProfile.getId(), request.lessonDurationMinutes());
 
         Booking booking = bookingRepository.save(Booking.reserve(student, tutorProfile, slot, request.lessonDurationMinutes()));
         booking.assignJitsiRoom(
@@ -86,14 +93,12 @@ public class BookingService {
     }
 
     @Transactional(readOnly = true)
-    public BookingListResponse getMyBookings(Long userId) {
-        UserAccount user = userAccountRepository.findWithRolesById(userId)
-                .orElseThrow(() -> new NotFoundException("User was not found."));
-        List<Booking> bookings = user.getActiveRole() == Role.TUTOR
-                ? tutorProfileRepository.findByUserId(userId)
-                        .map(profile -> bookingRepository.findAllByTutorProfileIdOrderByStartAtAsc(profile.getId()))
-                        .orElseGet(List::of)
-                : bookingRepository.findAllByStudentIdOrderByStartAtAsc(userId);
+        public BookingListResponse getMyBookings(Long userId, String participant) {
+        List<Booking> bookings = isTutorParticipant(participant)
+            ? tutorProfileRepository.findByUserId(userId)
+                .map(profile -> bookingRepository.findAllByTutorProfileIdOrderByStartAtAsc(profile.getId()))
+                .orElseGet(List::of)
+            : bookingRepository.findAllByStudentIdOrderByStartAtAsc(userId);
         return BookingListResponse.from(bookings, Instant.now());
     }
 
@@ -138,5 +143,41 @@ public class BookingService {
     private boolean canAccess(Long userId, Booking booking) {
         return booking.getStudent().getId().equals(userId)
                 || booking.getTutorProfile().getUser().getId().equals(userId);
+    }
+
+    private void ensureRemainingLessonCredit(Long studentUserId, Long tutorProfileId, int lessonDurationMinutes) {
+        int paidLessons = paymentRepository
+                .findAllByStudentIdAndTutorProfileIdAndLessonDurationMinutesAndStatusOrderByCreatedAtAsc(
+                        studentUserId,
+                        tutorProfileId,
+                        lessonDurationMinutes,
+                        PaymentStatus.PAID
+                )
+                .stream()
+                .mapToInt(Payment::getLessonPackCount)
+                .sum();
+        long consumedLessons = bookingRepository.countByStudentIdAndTutorProfileIdAndLessonDurationMinutesAndStatusNot(
+                studentUserId,
+                tutorProfileId,
+                lessonDurationMinutes,
+                BookingStatus.CANCELLED
+        );
+
+        if (paidLessons <= consumedLessons) {
+            throw new BusinessException(ErrorCode.INVALID_REQUEST, "Complete payment for this tutor before booking a lesson.");
+        }
+    }
+
+    private boolean isTutorParticipant(String participant) {
+        if (participant == null || participant.isBlank()) {
+            return false;
+        }
+        if ("student".equalsIgnoreCase(participant)) {
+            return false;
+        }
+        if ("tutor".equalsIgnoreCase(participant)) {
+            return true;
+        }
+        throw new BusinessException(ErrorCode.INVALID_REQUEST, "participant must be 'student' or 'tutor'.");
     }
 }

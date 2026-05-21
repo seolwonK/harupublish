@@ -81,6 +81,8 @@ public class PaymentService {
         if (lemonSqueezyClient.isEnabled()) {
             LemonSqueezyCheckout checkout = lemonSqueezyClient.createCheckout(payment);
             payment.attachCheckout(LemonSqueezyClient.PROVIDER, checkout.id(), checkout.url());
+        } else {
+            payment.markPaid();
         }
 
         return PaymentResponse.from(payment);

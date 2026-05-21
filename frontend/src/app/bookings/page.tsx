@@ -35,7 +35,7 @@ export default function BookingsPage() {
     setLoading(true);
     setError(null);
     haruApi
-      .getMyBookings(accessToken)
+      .getMyBookings(accessToken, "student")
       .then((response) => setBookings(response.bookings))
       .catch((err: Error) => setError(err.message))
       .finally(() => setLoading(false));

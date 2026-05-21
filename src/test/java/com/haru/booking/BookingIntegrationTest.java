@@ -62,6 +62,7 @@ class BookingIntegrationTest {
         long tutorProfileId = createApprovedTutorWithSchedule(tutorToken, "2031-05-20T01:00:00Z");
         long scheduleSlotId = firstScheduleSlotId(tutorToken, "2031-05-20T00:00:00Z", "2031-05-20T03:00:00Z");
         String studentToken = signupAndGetAccessToken("booking-student@example.com");
+        createCheckout(studentToken, tutorProfileId);
 
         String bookingResponse = mockMvc.perform(post("/api/bookings")
                         .header("Authorization", auth(studentToken))
@@ -98,6 +99,12 @@ class BookingIntegrationTest {
         mockMvc.perform(get("/api/bookings/me")
                         .header("Authorization", auth(tutorToken)))
                 .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.bookings.length()").value(0));
+
+        mockMvc.perform(get("/api/bookings/me")
+                        .param("participant", "tutor")
+                        .header("Authorization", auth(tutorToken)))
+                .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.bookings.length()").value(1))
                 .andExpect(jsonPath("$.data.bookings[0].id").value(bookingId));
 
@@ -128,6 +135,15 @@ class BookingIntegrationTest {
                         .header("Authorization", auth(tutorToken)))
                 .andExpect(status().isOk());
         approveTutorProfile(tutorProfileId);
+
+        mockMvc.perform(post("/api/bookings")
+                        .header("Authorization", auth(studentToken))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(bookingJson(tutorProfileId, scheduleSlotId, 25)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error.code").value("INVALID_REQUEST"));
+
+        createCheckout(studentToken, tutorProfileId);
 
         mockMvc.perform(post("/api/bookings")
                         .header("Authorization", auth(studentToken))
@@ -165,6 +181,7 @@ class BookingIntegrationTest {
         long tutorProfileId = createApprovedTutorWithSchedule(tutorToken, "2031-05-22T01:00:00Z");
         long futureSlotId = firstScheduleSlotId(tutorToken, "2031-05-22T00:00:00Z", "2031-05-22T03:00:00Z");
         String studentToken = signupAndGetAccessToken("booking-policy-student@example.com");
+        createCheckout(studentToken, tutorProfileId);
 
         long futureBookingId = createBooking(studentToken, tutorProfileId, futureSlotId);
         mockMvc.perform(patch("/api/bookings/%d/cancel".formatted(futureBookingId))
@@ -178,6 +195,7 @@ class BookingIntegrationTest {
         String nearTutorToken = signupAndGetAccessToken("booking-policy-near-tutor@example.com");
         long nearTutorProfileId = createApprovedTutorWithSchedule(nearTutorToken, "2026-05-18T00:00:00Z");
         long pastSlotId = firstScheduleSlotId(nearTutorToken, "2026-05-18T00:00:00Z", "2026-05-18T01:00:00Z");
+        createCheckout(studentToken, nearTutorProfileId);
         long pastBookingId = createBooking(studentToken, nearTutorProfileId, pastSlotId);
 
         mockMvc.perform(patch("/api/bookings/%d/cancel".formatted(pastBookingId))
@@ -290,6 +308,25 @@ class BookingIntegrationTest {
                 .getContentAsString();
         return objectMapper.readTree(response).get("data").get("id").asLong();
     }
+
+                private long createCheckout(String studentToken, long tutorProfileId) throws Exception {
+                                String response = mockMvc.perform(post("/api/payments/checkout")
+                                                                                                .header("Authorization", auth(studentToken))
+                                                                                                .contentType(MediaType.APPLICATION_JSON)
+                                                                                                .content("""
+                                                                                                                                {
+                                                                                                                                        "tutorProfileId": %d,
+                                                                                                                                        "lessonDurationMinutes": 25,
+                                                                                                                                        "lessonPackCount": 1,
+                                                                                                                                        "paymentMethod": "CARD"
+                                                                                                                                }
+                                                                                                                                """.formatted(tutorProfileId)))
+                                                                .andExpect(status().isOk())
+                                                                .andReturn()
+                                                                .getResponse()
+                                                                .getContentAsString();
+                                return objectMapper.readTree(response).get("data").get("id").asLong();
+                }
 
     private String bookingJson(long tutorProfileId, long scheduleSlotId, int durationMinutes) {
         return """

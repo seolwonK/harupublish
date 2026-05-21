@@ -23,7 +23,7 @@ export default function TutorProfilePage({ params }: { params: Promise<{ id: str
   const [slots, setSlots] = useState<ScheduleSlotResponse[]>([]);
   const [selectedSlotId, setSelectedSlotId] = useState<number | null>(null);
   const [lessonPackCount, setLessonPackCount] = useState(1);
-  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("LEMON_SQUEEZY");
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("CARD");
   const [loading, setLoading] = useState(Number.isFinite(numericId));
   const [bookingLoading, setBookingLoading] = useState(false);
   const [checkoutLoading, setCheckoutLoading] = useState(false);
@@ -81,7 +81,7 @@ export default function TutorProfilePage({ params }: { params: Promise<{ id: str
         window.location.href = payment.checkoutUrl;
         return;
       }
-      setMessage(`결제 요청이 생성되었습니다. 결제 ID ${payment.id}, 총액 ${toMoney(payment.totalAmount)}`);
+      setMessage(`결제가 완료되었습니다. 결제 ID ${payment.id}, 총액 ${toMoney(payment.totalAmount)}. 이제 시간을 선택해 예약할 수 있습니다.`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "결제 요청 생성에 실패했습니다.");
     } finally {
@@ -193,7 +193,7 @@ export default function TutorProfilePage({ params }: { params: Promise<{ id: str
         </div>
 
         <aside className="booking-panel panel" id="booking">
-          <SectionHeader eyebrow="Booking" title="25분 수업 예약" description="가능한 시간을 고르면 예약 즉시 Jitsi 수업방이 준비됩니다." />
+          <SectionHeader eyebrow="Booking" title="25분 수업 예약" description="먼저 결제를 완료한 뒤 가능한 시간을 골라 예약합니다." />
 
           <div className="booking-step-card">
             <span>1</span>
@@ -233,7 +233,7 @@ export default function TutorProfilePage({ params }: { params: Promise<{ id: str
           </div>
 
           <Button className="wide booking-primary-cta" onClick={() => void createBooking()} disabled={bookingLoading || !selectedSlotId}>
-            <CheckCircle2 size={16} /> {bookingLoading ? "예약 중..." : "25분 수업 예약하기"}
+            <CheckCircle2 size={16} /> {bookingLoading ? "예약 중..." : "결제 완료 후 예약하기"}
           </Button>
           {createdBookingId ? (
             <Button as="a" href="/bookings" variant="secondary" className="wide">
@@ -242,7 +242,7 @@ export default function TutorProfilePage({ params }: { params: Promise<{ id: str
           ) : null}
 
           <hr />
-          <SectionHeader eyebrow="Payment" title="패키지 결제" description="여러 회차 결제는 결제 페이지로 이어집니다." />
+          <SectionHeader eyebrow="Payment" title="패키지 결제" description="결제 완료된 회차 수만큼 같은 튜터 수업을 예약할 수 있습니다." />
           <div className="package-grid">
             {[1, 5, 10].map((count) => (
               <button className={lessonPackCount === count ? "selected" : ""} key={count} onClick={() => setLessonPackCount(count)}>

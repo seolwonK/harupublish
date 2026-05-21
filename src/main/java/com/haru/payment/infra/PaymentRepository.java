@@ -1,6 +1,7 @@
 package com.haru.payment.infra;
 
 import com.haru.payment.domain.Payment;
+import com.haru.payment.domain.PaymentStatus;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 
@@ -14,4 +15,12 @@ public interface PaymentRepository extends JpaRepository<Payment, Long> {
 
     @EntityGraph(attributePaths = {"student", "tutorProfile", "tutorProfile.user"})
     List<Payment> findAllByStudentIdOrderByCreatedAtDesc(Long studentId);
+
+    @EntityGraph(attributePaths = {"student", "tutorProfile", "tutorProfile.user"})
+    List<Payment> findAllByStudentIdAndTutorProfileIdAndLessonDurationMinutesAndStatusOrderByCreatedAtAsc(
+            Long studentId,
+            Long tutorProfileId,
+            int lessonDurationMinutes,
+            PaymentStatus status
+    );
 }

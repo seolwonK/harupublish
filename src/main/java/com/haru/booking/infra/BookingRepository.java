@@ -20,4 +20,11 @@ public interface BookingRepository extends JpaRepository<Booking, Long> {
 
     @EntityGraph(attributePaths = {"student", "tutorProfile", "tutorProfile.user", "scheduleSlot"})
     List<Booking> findAllByTutorProfileIdOrderByStartAtAsc(Long tutorProfileId);
+
+    long countByStudentIdAndTutorProfileIdAndLessonDurationMinutesAndStatusNot(
+            Long studentId,
+            Long tutorProfileId,
+            int lessonDurationMinutes,
+            BookingStatus status
+    );
 }

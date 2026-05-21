@@ -19,6 +19,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
@@ -47,8 +48,11 @@ public class BookingController {
 
     @Operation(summary = "내 예약 목록 조회", security = @SecurityRequirement(name = "bearerAuth"))
     @GetMapping("/me")
-    public ApiResponse<BookingListResponse> getMyBookings(@AuthenticationPrincipal HaruPrincipal principal) {
-        return ApiResponse.success(bookingService.getMyBookings(principal.userId()));
+    public ApiResponse<BookingListResponse> getMyBookings(
+            @AuthenticationPrincipal HaruPrincipal principal,
+            @RequestParam(required = false) String participant
+    ) {
+        return ApiResponse.success(bookingService.getMyBookings(principal.userId(), participant));
     }
 
     @Operation(summary = "예약 상세 조회", security = @SecurityRequirement(name = "bearerAuth"))
