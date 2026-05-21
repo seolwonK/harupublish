@@ -128,7 +128,6 @@ export type BookingJoinResponse = {
   domain: string | null;
   roomName: string | null;
   jwt: string | null;
-  externalUrl: string | null;
   expiresAt: string | null;
 };
 

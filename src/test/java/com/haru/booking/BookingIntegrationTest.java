@@ -187,15 +187,18 @@ class BookingIntegrationTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.error.code").value("INVALID_REQUEST"));
 
+        mockMvc.perform(get("/api/bookings/%d".formatted(pastBookingId))
+                        .header("Authorization", auth(studentToken)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("COMPLETED"))
+                .andExpect(jsonPath("$.data.joinAvailable").value(false));
+
         mockMvc.perform(get("/api/bookings/%d/join".formatted(pastBookingId))
                         .header("Authorization", auth(studentToken)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.joinAvailable").value(true))
-                .andExpect(jsonPath("$.data.provider").value("JITSI_JAAS"))
-                .andExpect(jsonPath("$.data.domain").value("8x8.vc"))
-                .andExpect(jsonPath("$.data.roomName").value(org.hamcrest.Matchers.startsWith("test-app/haru-booking-")))
-                .andExpect(jsonPath("$.data.jwt").isNotEmpty())
-                .andExpect(jsonPath("$.data.externalUrl").value(org.hamcrest.Matchers.startsWith("https://8x8.vc/test-app/haru-booking-")));
+                .andExpect(jsonPath("$.data.joinAvailable").value(false))
+                .andExpect(jsonPath("$.data.joinUrl").doesNotExist())
+                .andExpect(jsonPath("$.data.jwt").doesNotExist());
     }
 
     private long createApprovedTutorWithSchedule(String tutorToken, String startAt) throws Exception {

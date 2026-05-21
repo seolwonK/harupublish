@@ -105,22 +105,30 @@ public class Booking {
         }
         this.status = BookingStatus.CANCELLED;
         this.cancelReason = reason;
-        touch();
+        touch(now);
     }
 
     public void assignJitsiRoom(String provider, String roomName, Instant now) {
         this.jitsiProvider = provider;
         this.jitsiRoomName = roomName;
         this.jitsiCreatedAt = now;
-        touch();
+        touch(now);
     }
 
     public boolean isJoinAvailable(Instant now) {
-        return status == BookingStatus.RESERVED && !now.isBefore(startAt.minus(Duration.ofMinutes(10)));
+        return effectiveStatus(now) == BookingStatus.RESERVED
+                && !now.isBefore(startAt.minus(Duration.ofMinutes(10)));
     }
 
-    private void touch() {
-        updatedAt = Instant.now();
+    public BookingStatus effectiveStatus(Instant now) {
+        if (status == BookingStatus.RESERVED && !now.isBefore(endAt)) {
+            return BookingStatus.COMPLETED;
+        }
+        return status;
+    }
+
+    private void touch(Instant now) {
+        updatedAt = now;
     }
 
     public Long getId() {

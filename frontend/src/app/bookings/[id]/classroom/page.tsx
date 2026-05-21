@@ -132,8 +132,8 @@ export default function ClassroomPage() {
           <ArrowLeft size={16} /> Back
         </Button>
         <SectionHeader eyebrow="Jitsi Meet" title="Classroom" description="Join opens 10 minutes before the lesson starts." />
-        {join?.externalUrl ? (
-          <Button as="a" href={join.externalUrl} variant="ghost">
+        {join?.joinUrl ? (
+          <Button as="a" href={join.joinUrl} variant="ghost">
             <ExternalLink size={16} /> Open
           </Button>
         ) : null}

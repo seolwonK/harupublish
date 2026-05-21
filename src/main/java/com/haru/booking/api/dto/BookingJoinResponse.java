@@ -13,12 +13,11 @@ public record BookingJoinResponse(
         String domain,
         String roomName,
         String jwt,
-        String externalUrl,
         Instant expiresAt
 ) {
 
     public static BookingJoinResponse unavailable(Long bookingId, String message) {
-        return new BookingJoinResponse(bookingId, false, null, message, null, null, null, null, null, null);
+        return new BookingJoinResponse(bookingId, false, null, message, null, null, null, null, null);
     }
 
     public static BookingJoinResponse available(Long bookingId, JitsiJoinPayload payload) {
@@ -31,7 +30,6 @@ public record BookingJoinResponse(
                 payload.domain(),
                 payload.roomName(),
                 payload.jwt(),
-                payload.externalUrl(),
                 payload.expiresAt()
         );
     }

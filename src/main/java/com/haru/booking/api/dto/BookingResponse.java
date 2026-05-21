@@ -27,7 +27,7 @@ public record BookingResponse(
                 booking.getLessonDurationMinutes(),
                 booking.getStartAt(),
                 booking.getEndAt(),
-                booking.getStatus(),
+                booking.effectiveStatus(now),
                 booking.getCancelReason(),
                 booking.isJoinAvailable(now)
         );
