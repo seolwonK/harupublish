@@ -96,6 +96,7 @@ export type ScheduleSlotResponse = {
   id: number;
   startAt: string;
   endAt: string;
+  booked: boolean;
 };
 
 export type TutorScheduleResponse = {

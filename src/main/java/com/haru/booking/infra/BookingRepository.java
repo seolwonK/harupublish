@@ -4,7 +4,10 @@ import com.haru.booking.domain.Booking;
 import com.haru.booking.domain.BookingStatus;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 
@@ -20,6 +23,21 @@ public interface BookingRepository extends JpaRepository<Booking, Long> {
 
     @EntityGraph(attributePaths = {"student", "tutorProfile", "tutorProfile.user", "scheduleSlot"})
     List<Booking> findAllByTutorProfileIdOrderByStartAtAsc(Long tutorProfileId);
+
+        @Query("""
+            select b.scheduleSlot.id
+            from Booking b
+            where b.tutorProfile.id = :tutorProfileId
+              and b.status = :status
+              and b.startAt >= :from
+              and b.startAt < :to
+            """)
+        List<Long> findScheduleSlotIdsByTutorProfileIdAndStatusAndStartAtGreaterThanEqualAndStartAtLessThan(
+            @Param("tutorProfileId") Long tutorProfileId,
+            @Param("status") BookingStatus status,
+            @Param("from") Instant from,
+            @Param("to") Instant to
+        );
 
     long countByStudentIdAndTutorProfileIdAndLessonDurationMinutesAndStatusNot(
             Long studentId,

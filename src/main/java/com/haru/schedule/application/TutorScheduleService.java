@@ -1,5 +1,7 @@
 package com.haru.schedule.application;
 
+import com.haru.booking.domain.BookingStatus;
+import com.haru.booking.infra.BookingRepository;
 import com.haru.common.exception.BusinessException;
 import com.haru.common.exception.ErrorCode;
 import com.haru.common.exception.NotFoundException;
@@ -16,6 +18,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
+import java.util.Set;
 import java.util.TreeSet;
 
 @Service
@@ -26,13 +29,16 @@ public class TutorScheduleService {
 
     private final TutorProfileRepository tutorProfileRepository;
     private final TutorScheduleSlotRepository tutorScheduleSlotRepository;
+    private final BookingRepository bookingRepository;
 
     public TutorScheduleService(
             TutorProfileRepository tutorProfileRepository,
-            TutorScheduleSlotRepository tutorScheduleSlotRepository
+            TutorScheduleSlotRepository tutorScheduleSlotRepository,
+            BookingRepository bookingRepository
     ) {
         this.tutorProfileRepository = tutorProfileRepository;
         this.tutorScheduleSlotRepository = tutorScheduleSlotRepository;
+        this.bookingRepository = bookingRepository;
     }
 
     @Transactional
@@ -46,21 +52,34 @@ public class TutorScheduleService {
                         .map(startAt -> TutorScheduleSlot.of(profile, startAt, startAt.plus(SLOT_DURATION)))
                         .toList()
         );
-        return TutorScheduleResponse.from(slots);
+        return TutorScheduleResponse.from(slots, List.of());
     }
 
     @Transactional(readOnly = true)
     public TutorScheduleResponse getMySchedule(Long userId, Instant from, Instant to) {
         TutorProfile profile = getProfileByUserId(userId);
-        return TutorScheduleResponse.from(findSlots(profile.getId(), from, to));
+        return buildScheduleResponse(profile.getId(), from, to);
     }
 
     @Transactional(readOnly = true)
     public TutorScheduleResponse getPublicSchedule(Long tutorProfileId, Instant from, Instant to) {
         TutorProfile profile = tutorProfileRepository.findByIdAndStatus(tutorProfileId, TutorProfileStatus.APPROVED)
                 .orElseThrow(() -> new NotFoundException("Tutor profile was not found."));
-        return TutorScheduleResponse.from(findSlots(profile.getId(), from, to));
+        return buildScheduleResponse(profile.getId(), from, to);
     }
+
+        private TutorScheduleResponse buildScheduleResponse(Long tutorProfileId, Instant from, Instant to) {
+        List<TutorScheduleSlot> slots = findSlots(tutorProfileId, from, to);
+        Set<Long> bookedSlotIds = Set.copyOf(
+            bookingRepository.findScheduleSlotIdsByTutorProfileIdAndStatusAndStartAtGreaterThanEqualAndStartAtLessThan(
+                tutorProfileId,
+                BookingStatus.RESERVED,
+                from,
+                to
+            )
+        );
+        return TutorScheduleResponse.from(slots, bookedSlotIds);
+        }
 
     private List<TutorScheduleSlot> findSlots(Long tutorProfileId, Instant from, Instant to) {
         validateRange(from, to);

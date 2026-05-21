@@ -472,14 +472,16 @@ export function SendButton() {
 export function TimePill({
   children,
   selected,
-  onClick
+  onClick,
+  disabled
 }: {
   children: React.ReactNode;
   selected?: boolean;
   onClick?: () => void;
+  disabled?: boolean;
 }) {
   return (
-    <button className={`time-pill ${selected ? "selected" : ""}`} onClick={onClick}>
+    <button className={`time-pill ${selected ? "selected" : ""}`} onClick={onClick} disabled={disabled}>
       {children}
     </button>
   );

@@ -40,7 +40,7 @@ export default function TutorProfilePage({ params }: { params: Promise<{ id: str
       .then(([profile, schedule]) => {
         setTutor(profile);
         setSlots(schedule.slots);
-        setSelectedSlotId(schedule.slots[0]?.id ?? null);
+        setSelectedSlotId(schedule.slots.find((slot) => !slot.booked)?.id ?? null);
       })
       .catch((err: Error) => setError(err.message))
       .finally(() => setLoading(false));
@@ -51,7 +51,12 @@ export default function TutorProfilePage({ params }: { params: Promise<{ id: str
   const profileIntro = tutor?.shortIntroduction ?? "목표와 관심사에 맞춰 한국어 회화와 문화를 함께 알려주는 튜터입니다.";
   const profileImageUrl = tutor?.profileImageUrl || tutor?.thumbnailUrl;
   const selectedSlot = useMemo(() => slots.find((slot) => slot.id === selectedSlotId), [selectedSlotId, slots]);
+  const selectedDate = selectedSlot ? formatDate(selectedSlot.startAt) : null;
   const slotDates = useMemo(() => Array.from(new Set(slots.map((slot) => formatDate(slot.startAt)))).slice(0, 6), [slots]);
+  const visibleSlots = useMemo(
+    () => slots.filter((slot) => !selectedDate || formatDate(slot.startAt) === selectedDate),
+    [selectedDate, slots]
+  );
   const unitPrice = tutor?.lessonPrice25Amount;
 
   async function payAndBook() {
@@ -194,21 +199,32 @@ export default function TutorProfilePage({ params }: { params: Promise<{ id: str
 
           <h3>날짜</h3>
           <div className="date-chip-row">
-            {slotDates.map((date) => (
-              <button
-                className={selectedSlot && formatDate(selectedSlot.startAt) === date ? "selected" : ""}
-                key={date}
-                onClick={() => setSelectedSlotId(slots.find((slot) => formatDate(slot.startAt) === date)?.id ?? null)}
-              >
-                {date}
-              </button>
-            ))}
+            {slotDates.map((date) => {
+              const dateSlots = slots.filter((slot) => formatDate(slot.startAt) === date);
+              const firstAvailableSlot = dateSlots.find((slot) => !slot.booked);
+
+              return (
+                <button
+                  className={selectedSlot && formatDate(selectedSlot.startAt) === date ? "selected" : ""}
+                  key={date}
+                  onClick={() => setSelectedSlotId(firstAvailableSlot?.id ?? null)}
+                  disabled={!firstAvailableSlot}
+                >
+                  {date}
+                </button>
+              );
+            })}
           </div>
 
           <h3>시간 선택 <span>내 현지 시간 기준</span></h3>
           <div className="time-grid">
-            {slots.slice(0, 12).map((slot) => (
-              <TimePill selected={slot.id === selectedSlotId} key={slot.id} onClick={() => setSelectedSlotId(slot.id)}>
+            {visibleSlots.slice(0, 12).map((slot) => (
+              <TimePill
+                selected={slot.id === selectedSlotId}
+                key={slot.id}
+                onClick={() => setSelectedSlotId(slot.id)}
+                disabled={slot.booked}
+              >
                 {formatTime(slot.startAt)}
               </TimePill>
             ))}
