@@ -59,6 +59,15 @@ public class Booking {
     @Column(name = "cancel_reason", length = 500)
     private String cancelReason;
 
+    @Column(name = "jitsi_provider", length = 30)
+    private String jitsiProvider;
+
+    @Column(name = "jitsi_room_name", length = 160)
+    private String jitsiRoomName;
+
+    @Column(name = "jitsi_created_at")
+    private Instant jitsiCreatedAt;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
@@ -96,6 +105,13 @@ public class Booking {
         }
         this.status = BookingStatus.CANCELLED;
         this.cancelReason = reason;
+        touch();
+    }
+
+    public void assignJitsiRoom(String provider, String roomName, Instant now) {
+        this.jitsiProvider = provider;
+        this.jitsiRoomName = roomName;
+        this.jitsiCreatedAt = now;
         touch();
     }
 
@@ -141,6 +157,18 @@ public class Booking {
 
     public String getCancelReason() {
         return cancelReason;
+    }
+
+    public String getJitsiProvider() {
+        return jitsiProvider;
+    }
+
+    public String getJitsiRoomName() {
+        return jitsiRoomName;
+    }
+
+    public Instant getJitsiCreatedAt() {
+        return jitsiCreatedAt;
     }
 
     public Instant getCreatedAt() {

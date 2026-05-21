@@ -55,3 +55,11 @@ haru:
       redirect-url: ${LEMON_SQUEEZY_REDIRECT_URL:http://localhost:3000/payments}
       test-mode: ${LEMON_SQUEEZY_TEST_MODE:true}
       custom-price-exchange-rate: ${LEMON_SQUEEZY_CUSTOM_PRICE_EXCHANGE_RATE:1}
+  jitsi:
+    jaas:
+      enabled: ${JITSI_JAAS_ENABLED:false}
+      app-id: ${JITSI_JAAS_APP_ID:}
+      key-id: ${JITSI_JAAS_KEY_ID:}
+      private-key-pem: ${JITSI_JAAS_PRIVATE_KEY_PEM:}
+      domain: ${JITSI_JAAS_DOMAIN:8x8.vc}
+      token-ttl-minutes: ${JITSI_JAAS_TOKEN_TTL_MINUTES:120}

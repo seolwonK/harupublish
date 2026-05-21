@@ -12,6 +12,8 @@ import com.haru.common.exception.BusinessException;
 import com.haru.common.exception.ErrorCode;
 import com.haru.common.exception.ForbiddenException;
 import com.haru.common.exception.NotFoundException;
+import com.haru.meeting.application.JitsiRoomNameGenerator;
+import com.haru.meeting.application.JitsiTokenService;
 import com.haru.schedule.domain.TutorScheduleSlot;
 import com.haru.schedule.infra.TutorScheduleSlotRepository;
 import com.haru.tutor.domain.TutorProfile;
@@ -33,17 +35,23 @@ public class BookingService {
     private final TutorProfileRepository tutorProfileRepository;
     private final TutorScheduleSlotRepository tutorScheduleSlotRepository;
     private final BookingRepository bookingRepository;
+    private final JitsiRoomNameGenerator jitsiRoomNameGenerator;
+    private final JitsiTokenService jitsiTokenService;
 
     public BookingService(
             UserAccountRepository userAccountRepository,
             TutorProfileRepository tutorProfileRepository,
             TutorScheduleSlotRepository tutorScheduleSlotRepository,
-            BookingRepository bookingRepository
+            BookingRepository bookingRepository,
+            JitsiRoomNameGenerator jitsiRoomNameGenerator,
+            JitsiTokenService jitsiTokenService
     ) {
         this.userAccountRepository = userAccountRepository;
         this.tutorProfileRepository = tutorProfileRepository;
         this.tutorScheduleSlotRepository = tutorScheduleSlotRepository;
         this.bookingRepository = bookingRepository;
+        this.jitsiRoomNameGenerator = jitsiRoomNameGenerator;
+        this.jitsiTokenService = jitsiTokenService;
     }
 
     @Transactional
@@ -69,6 +77,11 @@ public class BookingService {
         }
 
         Booking booking = bookingRepository.save(Booking.reserve(student, tutorProfile, slot, request.lessonDurationMinutes()));
+        booking.assignJitsiRoom(
+                JitsiTokenService.PROVIDER,
+                jitsiRoomNameGenerator.createRoomName(booking.getId()),
+                Instant.now()
+        );
         return BookingResponse.from(booking, Instant.now());
     }
 
@@ -100,11 +113,17 @@ public class BookingService {
     @Transactional(readOnly = true)
     public BookingJoinResponse join(Long userId, Long bookingId) {
         Booking booking = getBookingWithAccess(userId, bookingId);
-        boolean joinAvailable = booking.isJoinAvailable(Instant.now());
-        String message = joinAvailable
-                ? "Jitsi integration is not configured yet."
-                : "Lesson can be joined 10 minutes before start.";
-        return new BookingJoinResponse(booking.getId(), joinAvailable, null, message);
+        Instant now = Instant.now();
+        if (!booking.isJoinAvailable(now)) {
+            return BookingJoinResponse.unavailable(booking.getId(), "Lesson can be joined 10 minutes before start.");
+        }
+
+        boolean moderator = booking.getTutorProfile().getUser().getId().equals(userId);
+        UserAccount participant = moderator ? booking.getTutorProfile().getUser() : booking.getStudent();
+        return BookingJoinResponse.available(
+                booking.getId(),
+                jitsiTokenService.createJoinPayload(booking, participant, moderator, now)
+        );
     }
 
     private Booking getBookingWithAccess(Long userId, Long bookingId) {

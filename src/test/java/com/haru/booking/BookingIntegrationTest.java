@@ -11,9 +11,14 @@ import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMock
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 
+import java.security.KeyPair;
+import java.security.KeyPairGenerator;
 import java.time.Instant;
+import java.util.Base64;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
@@ -35,6 +40,21 @@ class BookingIntegrationTest {
 
     @Autowired
     UserAccountRepository userAccountRepository;
+
+    @DynamicPropertySource
+    static void jitsiProperties(DynamicPropertyRegistry registry) throws Exception {
+        KeyPairGenerator generator = KeyPairGenerator.getInstance("RSA");
+        generator.initialize(2048);
+        KeyPair keyPair = generator.generateKeyPair();
+        String privateKey = Base64.getMimeEncoder(64, "\n".getBytes()).encodeToString(keyPair.getPrivate().getEncoded());
+        String pem = "-----BEGIN PRIVATE KEY-----\n" + privateKey + "\n-----END PRIVATE KEY-----";
+
+        registry.add("haru.jitsi.jaas.enabled", () -> "true");
+        registry.add("haru.jitsi.jaas.app-id", () -> "test-app");
+        registry.add("haru.jitsi.jaas.key-id", () -> "test-key");
+        registry.add("haru.jitsi.jaas.private-key-pem", () -> pem);
+        registry.add("haru.jitsi.jaas.domain", () -> "8x8.vc");
+    }
 
     @Test
     void studentCanBookApprovedTutorScheduleAndTutorCanReadIt() throws Exception {
@@ -85,7 +105,8 @@ class BookingIntegrationTest {
                         .header("Authorization", auth(studentToken)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.joinAvailable").value(false))
-                .andExpect(jsonPath("$.data.joinUrl").doesNotExist());
+                .andExpect(jsonPath("$.data.joinUrl").doesNotExist())
+                .andExpect(jsonPath("$.data.jwt").doesNotExist());
     }
 
     @Test
@@ -169,7 +190,12 @@ class BookingIntegrationTest {
         mockMvc.perform(get("/api/bookings/%d/join".formatted(pastBookingId))
                         .header("Authorization", auth(studentToken)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.joinAvailable").value(true));
+                .andExpect(jsonPath("$.data.joinAvailable").value(true))
+                .andExpect(jsonPath("$.data.provider").value("JITSI_JAAS"))
+                .andExpect(jsonPath("$.data.domain").value("8x8.vc"))
+                .andExpect(jsonPath("$.data.roomName").value(org.hamcrest.Matchers.startsWith("test-app/haru-booking-")))
+                .andExpect(jsonPath("$.data.jwt").isNotEmpty())
+                .andExpect(jsonPath("$.data.externalUrl").value(org.hamcrest.Matchers.startsWith("https://8x8.vc/test-app/haru-booking-")));
     }
 
     private long createApprovedTutorWithSchedule(String tutorToken, String startAt) throws Exception {

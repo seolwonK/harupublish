@@ -124,6 +124,12 @@ export type BookingJoinResponse = {
   joinAvailable: boolean;
   joinUrl: string | null;
   message: string;
+  provider: string | null;
+  domain: string | null;
+  roomName: string | null;
+  jwt: string | null;
+  externalUrl: string | null;
+  expiresAt: string | null;
 };
 
 export type PaymentResponse = {

@@ -1,11 +1,19 @@
 "use client";
 
-import { CalendarDays, Globe2, MapPin, MessageCircle, Play, ShieldCheck } from "lucide-react";
+import { CalendarDays, CheckCircle2, Clock, Globe2, MapPin, MessageCircle, Play, ShieldCheck, Video } from "lucide-react";
 import { use, useEffect, useMemo, useState } from "react";
 import { dateRangeFromToday, haruApi, PaymentMethod, ScheduleSlotResponse, toMoney, TutorProfileResponse } from "../../api";
 import { useAuth } from "../../auth";
 import { ApiNotice, Avatar, Badge, Button, categoryLabel, EmptyState, IconMeta, Rating, SectionHeader, TimePill, TutorPortrait } from "../../components";
 import { reviews, tutors } from "../../data";
+
+function formatDate(value: string) {
+  return new Date(value).toLocaleDateString("ko-KR", { month: "long", day: "numeric", weekday: "short" });
+}
+
+function formatTime(value: string) {
+  return new Date(value).toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" });
+}
 
 export default function TutorProfilePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -14,10 +22,12 @@ export default function TutorProfilePage({ params }: { params: Promise<{ id: str
   const [tutor, setTutor] = useState<TutorProfileResponse | null>(null);
   const [slots, setSlots] = useState<ScheduleSlotResponse[]>([]);
   const [selectedSlotId, setSelectedSlotId] = useState<number | null>(null);
-  const [duration, setDuration] = useState(25);
   const [lessonPackCount, setLessonPackCount] = useState(1);
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("LEMON_SQUEEZY");
   const [loading, setLoading] = useState(Number.isFinite(numericId));
+  const [bookingLoading, setBookingLoading] = useState(false);
+  const [checkoutLoading, setCheckoutLoading] = useState(false);
+  const [createdBookingId, setCreatedBookingId] = useState<number | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const mockTutor = tutors[0];
@@ -41,27 +51,29 @@ export default function TutorProfilePage({ params }: { params: Promise<{ id: str
 
   const displayName = tutor?.displayName ?? mockTutor.name;
   const languages = tutor?.availableLanguages?.join(" · ") ?? mockTutor.languages;
-  const profileIntro = tutor?.shortIntroduction ?? "목표에 맞춰 한국어 회화와 한국 문화를 함께 알려드리는 튜터입니다.";
+  const profileIntro = tutor?.shortIntroduction ?? "목표와 관심사에 맞춰 한국어 회화와 문화를 함께 알려주는 튜터입니다.";
   const profileImageUrl = tutor?.profileImageUrl || tutor?.thumbnailUrl;
   const selectedSlot = useMemo(() => slots.find((slot) => slot.id === selectedSlotId), [selectedSlotId, slots]);
-  const unitPrice = duration === 25 ? tutor?.lessonPrice25Amount : tutor?.lessonPrice50Amount;
+  const slotDates = useMemo(() => Array.from(new Set(slots.map((slot) => formatDate(slot.startAt)))).slice(0, 6), [slots]);
+  const unitPrice = tutor?.lessonPrice25Amount;
 
   async function createCheckout() {
     if (!accessToken) {
-      setError("결제 요청을 만들려면 먼저 로그인해주세요.");
+      setError("결제를 진행하려면 먼저 로그인해 주세요.");
       return;
     }
     if (!tutor?.id) {
-      setError("튜터 프로필을 먼저 불러와야 합니다.");
+      setError("튜터 정보를 먼저 불러와야 합니다.");
       return;
     }
 
     setError(null);
     setMessage(null);
+    setCheckoutLoading(true);
     try {
       const payment = await haruApi.createCheckout(accessToken, {
         tutorProfileId: tutor.id,
-        lessonDurationMinutes: duration,
+        lessonDurationMinutes: 25,
         lessonPackCount,
         paymentMethod
       });
@@ -69,33 +81,39 @@ export default function TutorProfilePage({ params }: { params: Promise<{ id: str
         window.location.href = payment.checkoutUrl;
         return;
       }
-      setMessage(`결제 요청이 생성되었습니다. 결제 ID: ${payment.id}, 총액: ${toMoney(payment.totalAmount)}`);
+      setMessage(`결제 요청이 생성되었습니다. 결제 ID ${payment.id}, 총액 ${toMoney(payment.totalAmount)}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "결제 요청 생성에 실패했습니다.");
+    } finally {
+      setCheckoutLoading(false);
     }
   }
 
   async function createBooking() {
     if (!accessToken) {
-      setError("예약하려면 먼저 로그인해주세요.");
+      setError("수업을 예약하려면 먼저 로그인해 주세요.");
       return;
     }
     if (!tutor?.id || !selectedSlotId) {
-      setError("예약 가능한 시간을 먼저 선택해주세요.");
+      setError("예약 가능한 시간을 선택해 주세요.");
       return;
     }
 
     setError(null);
     setMessage(null);
+    setBookingLoading(true);
     try {
       const booking = await haruApi.createBooking(accessToken, {
         tutorProfileId: tutor.id,
         scheduleSlotId: selectedSlotId,
-        lessonDurationMinutes: duration
+        lessonDurationMinutes: 25
       });
-      setMessage(`예약이 생성되었습니다. 예약 ID: ${booking.id}`);
+      setCreatedBookingId(booking.id);
+      setMessage("예약이 완료되었습니다. 내 예약에서 수업방을 열 수 있습니다.");
     } catch (err) {
       setError(err instanceof Error ? err.message : "예약 생성에 실패했습니다.");
+    } finally {
+      setBookingLoading(false);
     }
   }
 
@@ -118,7 +136,9 @@ export default function TutorProfilePage({ params }: { params: Promise<{ id: str
             <IconMeta icon={Globe2}>{languages}</IconMeta>
           </div>
           <div className="profile-cta-row">
-            <Button as="a" href="#booking">예약하기</Button>
+            <Button as="a" href="#booking">
+              <CalendarDays size={16} /> 수업 예약하기
+            </Button>
             <Button as="a" href="/chat" variant="secondary">
               <MessageCircle size={16} /> 메시지 보내기
             </Button>
@@ -130,10 +150,20 @@ export default function TutorProfilePage({ params }: { params: Promise<{ id: str
         <div className="profile-content panel">
           {error ? <ApiNotice type="error">{error}</ApiNotice> : null}
           {message ? <ApiNotice type="success">{message}</ApiNotice> : null}
-          {loading ? <EmptyState title="튜터 정보를 불러오는 중" body="프로필과 공개 일정을 조회하고 있습니다." /> : null}
+          {createdBookingId ? (
+            <div className="booking-success-actions">
+              <Button as="a" href="/bookings" variant="primary">
+                내 예약 보기
+              </Button>
+              <Button as="a" href={`/bookings/${createdBookingId}/classroom`} variant="secondary">
+                <Video size={16} /> 수업방 확인
+              </Button>
+            </div>
+          ) : null}
+          {loading ? <EmptyState title="튜터 정보를 불러오는 중" body="프로필과 공개 일정을 확인하고 있습니다." /> : null}
 
           <SectionHeader eyebrow="About" title="About me" />
-          <p>{tutor?.aboutMe ?? "안녕하세요. Haru에서 한국어를 배우는 학생을 위해 목표와 관심사에 맞춘 수업을 준비하고 있습니다."}</p>
+          <p>{tutor?.aboutMe ?? "Haru에서 한국어를 배우는 학생을 위해 목표와 관심사에 맞춘 수업을 준비합니다."}</p>
 
           <hr />
           <SectionHeader eyebrow="Lessons" title="What I Offer" />
@@ -163,20 +193,56 @@ export default function TutorProfilePage({ params }: { params: Promise<{ id: str
         </div>
 
         <aside className="booking-panel panel" id="booking">
-          <SectionHeader eyebrow="Booking" title="수업 예약" description="수업 길이, 패키지, 시간을 순서대로 선택하세요." />
-          <h3>수업 길이</h3>
-          <div className="price-options">
-            <button className={duration === 25 ? "selected" : ""} onClick={() => setDuration(25)}>
-              <span>25분</span>
-              <strong>{toMoney(tutor?.lessonPrice25Amount)}</strong>
-            </button>
-            <button className={duration === 50 ? "selected" : ""} onClick={() => setDuration(50)}>
-              <span>50분</span>
-              <strong>{toMoney(tutor?.lessonPrice50Amount)}</strong>
-            </button>
+          <SectionHeader eyebrow="Booking" title="25분 수업 예약" description="가능한 시간을 고르면 예약 즉시 Jitsi 수업방이 준비됩니다." />
+
+          <div className="booking-step-card">
+            <span>1</span>
+            <div>
+              <strong>수업 길이</strong>
+              <p>현재 예약 v1은 25분 수업만 지원합니다.</p>
+            </div>
+            <Badge tone="green">25분</Badge>
           </div>
 
-          <h3>패키지</h3>
+          <h3>날짜</h3>
+          <div className="date-chip-row">
+            {slotDates.map((date) => (
+              <button
+                className={selectedSlot && formatDate(selectedSlot.startAt) === date ? "selected" : ""}
+                key={date}
+                onClick={() => setSelectedSlotId(slots.find((slot) => formatDate(slot.startAt) === date)?.id ?? null)}
+              >
+                {date}
+              </button>
+            ))}
+          </div>
+
+          <h3>시간 선택 <span>내 현지 시간 기준</span></h3>
+          <div className="time-grid">
+            {slots.slice(0, 12).map((slot) => (
+              <TimePill selected={slot.id === selectedSlotId} key={slot.id} onClick={() => setSelectedSlotId(slot.id)}>
+                {formatTime(slot.startAt)}
+              </TimePill>
+            ))}
+          </div>
+          {slots.length === 0 ? <EmptyState title="예약 가능한 시간이 없습니다" body="튜터가 공개 일정을 등록하면 예약할 수 있습니다." /> : null}
+
+          <div className="booking-total">
+            <span>예상 금액</span>
+            <strong>{toMoney(unitPrice)}</strong>
+          </div>
+
+          <Button className="wide booking-primary-cta" onClick={() => void createBooking()} disabled={bookingLoading || !selectedSlotId}>
+            <CheckCircle2 size={16} /> {bookingLoading ? "예약 중..." : "25분 수업 예약하기"}
+          </Button>
+          {createdBookingId ? (
+            <Button as="a" href="/bookings" variant="secondary" className="wide">
+              내 예약으로 이동
+            </Button>
+          ) : null}
+
+          <hr />
+          <SectionHeader eyebrow="Payment" title="패키지 결제" description="여러 회차 결제는 결제 페이지로 이어집니다." />
           <div className="package-grid">
             {[1, 5, 10].map((count) => (
               <button className={lessonPackCount === count ? "selected" : ""} key={count} onClick={() => setLessonPackCount(count)}>
@@ -184,46 +250,17 @@ export default function TutorProfilePage({ params }: { params: Promise<{ id: str
               </button>
             ))}
           </div>
-
-          <h3>결제 수단</h3>
           <select className="date-select" value={paymentMethod} onChange={(event) => setPaymentMethod(event.target.value as PaymentMethod)}>
             <option value="LEMON_SQUEEZY">Lemon Squeezy</option>
             <option value="CARD">Card</option>
             <option value="PAYPAL">PayPal</option>
             <option value="SIMPLE_PAY">Simple Pay</option>
           </select>
-
-          <h3>날짜</h3>
-          <button className="date-select">
-            {selectedSlot ? new Date(selectedSlot.startAt).toLocaleDateString("ko-KR") : "예약 가능한 시간 없음"}
-            <CalendarDays size={16} />
-          </button>
-
-          <h3>시간 선택 <span>(한국 시간)</span></h3>
-          <div className="time-grid">
-            {slots.slice(0, 9).map((slot) => (
-              <TimePill selected={slot.id === selectedSlotId} key={slot.id} onClick={() => setSelectedSlotId(slot.id)}>
-                {new Date(slot.startAt).toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" })}
-              </TimePill>
-            ))}
-          </div>
-          {slots.length === 0 ? <EmptyState title="등록된 시간이 없습니다" body="튜터가 공개 일정을 등록하면 예약할 수 있습니다." /> : null}
-
-          <div className="booking-total">
-            <span>예상 금액</span>
-            <strong>{toMoney(unitPrice)} · {lessonPackCount}회</strong>
-          </div>
-          <Button className="wide" onClick={() => void createBooking()}>
-            Book now
-          </Button>
-          <Button className="wide" variant="secondary" onClick={() => void createCheckout()}>
-            Lemon Squeezy 결제하기
-          </Button>
-          <Button as="a" href="/chat" variant="ghost" className="wide">
-            Send message
+          <Button className="wide" variant="secondary" onClick={() => void createCheckout()} disabled={checkoutLoading}>
+            {checkoutLoading ? "결제 준비 중..." : "패키지 결제하기"}
           </Button>
           <p className="notice">
-            <ShieldCheck size={14} /> 예약 생성은 로그인한 학생 계정으로만 가능합니다.
+            <ShieldCheck size={14} /> 수업 시작 10분 전부터 내 예약에서 Jitsi 수업방에 입장할 수 있습니다.
           </p>
         </aside>
       </section>
