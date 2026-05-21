@@ -166,7 +166,7 @@ export function AppHeader() {
         <BrandLogo />
       </a>
       <nav aria-label="주요 메뉴">
-        <a href="/#experts">튜터 찾기</a>
+        <a href="/tutors">튜터 찾기</a>
         <a href="/bookings">내 예약</a>
         <a href="/payments">결제</a>
         <a href="/tutor/dashboard">튜터 센터</a>

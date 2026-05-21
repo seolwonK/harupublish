@@ -246,7 +246,7 @@ export default function HomePage() {
             <div className="hero-search" role="search">
               <Search size={19} />
               <span>수업 주제, 튜터 이름, 관심사를 검색해보세요</span>
-              <a href="#experts">
+              <a href="/tutors">
                 튜터 찾기 <ArrowRight size={16} />
               </a>
             </div>
@@ -256,7 +256,7 @@ export default function HomePage() {
           </div>
           <div className="category-row" aria-label="추천 수업 주제">
             {categories.map((category) => (
-              <a href="#experts" key={category}>
+              <a href="/tutors" key={category}>
                 {category}
               </a>
             ))}
@@ -359,7 +359,7 @@ export default function HomePage() {
                 <strong>{privateLoading ? "예약을 불러오는 중입니다" : accessToken ? "예정된 수업이 없습니다" : "로그인하면 다음 수업이 표시됩니다"}</strong>
                 <span>{accessToken ? "추천 튜터를 둘러보고 첫 수업을 예약해보세요." : "내 예약과 결제 상태를 로그인 후 확인할 수 있어요."}</span>
               </div>
-              <Button as="a" href={accessToken ? "/#experts" : "/login"}>{accessToken ? "튜터 찾기" : "로그인"}</Button>
+              <Button as="a" href={accessToken ? "/tutors" : "/login"}>{accessToken ? "튜터 찾기" : "로그인"}</Button>
             </div>
           )}
         </article>
