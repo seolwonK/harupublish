@@ -83,7 +83,14 @@ export default function PaymentsPage() {
 
           {message ? <ApiNotice type="success">{message}</ApiNotice> : null}
           {error ? <ApiNotice type="error">{error}</ApiNotice> : null}
-          {!accessToken ? <EmptyState title="로그인이 필요합니다" body="결제 내역을 보려면 먼저 로그인해주세요." /> : null}
+          {!accessToken ? (
+            <div className="booking-empty-panel">
+              <EmptyState title="로그인이 필요합니다" body="결제 내역을 보려면 먼저 로그인해주세요." />
+              <Button as="a" href="/login">
+                로그인하기
+              </Button>
+            </div>
+          ) : null}
           {accessToken && payments.length === 0 ? (
             <EmptyState title="결제 요청이 없습니다" body="튜터 상세 화면에서 회차권을 선택하고 Lemon Squeezy 결제를 시작하세요." />
           ) : null}

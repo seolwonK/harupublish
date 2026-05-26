@@ -23,4 +23,6 @@ haru:
     refresh-token-expiration-days: 14
   payments:
     lemon-squeezy:
+      enabled: false
       mock-paid-checkout-enabled: true
+      signing-secret: test-webhook-secret

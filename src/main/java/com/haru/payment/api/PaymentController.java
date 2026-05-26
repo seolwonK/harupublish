@@ -70,7 +70,7 @@ public class PaymentController {
     }
 
     @Operation(summary = "Lemon Squeezy webhook")
-    @PostMapping("/webhooks/lemonsqueezy")
+    @PostMapping({"/webhooks/lemonsqueezy", "/webhooks/lemon-squeezy"})
     public ApiResponse<Void> lemonSqueezyWebhook(
             @RequestHeader(name = "X-Signature", required = false) String signature,
             @RequestHeader(name = "X-Event-Name", required = false) String eventName,

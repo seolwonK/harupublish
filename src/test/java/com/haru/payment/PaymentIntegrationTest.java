@@ -18,6 +18,10 @@ import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 
+import java.nio.charset.StandardCharsets;
+import javax.crypto.Mac;
+import javax.crypto.spec.SecretKeySpec;
+
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -25,7 +29,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-@SpringBootTest
+@SpringBootTest(properties = "haru.payments.lemon-squeezy.enabled=false")
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
 class PaymentIntegrationTest {
@@ -214,6 +218,48 @@ class PaymentIntegrationTest {
                 .andExpect(jsonPath("$.data.refundReason").value("Schedule changed"));
     }
 
+    @Test
+    void lemonSqueezyWebhookMarksPaymentPaidThroughDocumentedHyphenEndpoint() throws Exception {
+        String tutorToken = signupAndGetAccessToken("payment-webhook-tutor@example.com");
+        long tutorProfileId = createApprovedTutor(tutorToken);
+        String studentEmail = "payment-webhook-student@example.com";
+        String studentToken = signupAndGetAccessToken(studentEmail);
+        long pendingPaymentId = createPendingCheckout(studentEmail, tutorProfileId);
+
+        String payload = """
+                {
+                  "meta": {
+                    "event_name": "order_created",
+                    "custom_data": {
+                      "payment_id": "%d"
+                    }
+                  },
+                  "data": {
+                    "type": "orders",
+                    "id": "98765",
+                    "attributes": {
+                      "identifier": "order-identifier-98765",
+                      "status": "paid",
+                      "refunded": false
+                    }
+                  }
+                }
+                """.formatted(pendingPaymentId);
+
+        mockMvc.perform(post("/api/payments/webhooks/lemon-squeezy")
+                        .header("X-Signature", hmac(payload))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(payload))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(get("/api/payments/%d".formatted(pendingPaymentId))
+                        .header("Authorization", auth(studentToken)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("PAID"))
+                .andExpect(jsonPath("$.data.providerOrderId").value("98765"))
+                .andExpect(jsonPath("$.data.providerOrderIdentifier").value("order-identifier-98765"));
+    }
+
     private long createApprovedTutor(String tutorToken) throws Exception {
         long tutorProfileId = switchToTutorAndGetProfileId(tutorToken);
         saveCompleteTutorProfile(tutorToken);
@@ -349,5 +395,16 @@ class PaymentIntegrationTest {
 
     private String auth(String accessToken) {
         return "Bearer " + accessToken;
+    }
+
+    private String hmac(String payload) throws Exception {
+        Mac mac = Mac.getInstance("HmacSHA256");
+        mac.init(new SecretKeySpec("test-webhook-secret".getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
+        byte[] bytes = mac.doFinal(payload.getBytes(StandardCharsets.UTF_8));
+        StringBuilder result = new StringBuilder(bytes.length * 2);
+        for (byte item : bytes) {
+            result.append(String.format("%02x", item));
+        }
+        return result.toString();
     }
 }

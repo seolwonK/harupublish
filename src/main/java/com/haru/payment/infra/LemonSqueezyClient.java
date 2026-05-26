@@ -140,7 +140,7 @@ public class LemonSqueezyClient {
         assertConfigured();
 
         try {
-            String response = RestClient.builder()
+            return parseOrders(RestClient.builder()
                     .baseUrl(properties.getApiBaseUrl())
                     .defaultHeader("Authorization", "Bearer " + properties.getApiKey())
                     .defaultHeader("Accept", "application/vnd.api+json")
@@ -153,17 +153,7 @@ public class LemonSqueezyClient {
                             .queryParam("page[size]", 100)
                             .build())
                     .retrieve()
-                    .body(String.class);
-
-            JsonNode root = objectMapper.readTree(response);
-            JsonNode data = root.path("data");
-            if (!data.isArray()) {
-                return List.of();
-            }
-
-            List<LemonSqueezyOrder> orders = new ArrayList<>();
-            data.forEach(item -> orders.add(parseOrder(item)));
-            return orders;
+                    .body(String.class));
         } catch (RestClientResponseException exception) {
             throw providerException(exception);
         } catch (BusinessException exception) {
@@ -171,6 +161,44 @@ public class LemonSqueezyClient {
         } catch (Exception exception) {
             throw new BusinessException(ErrorCode.INVALID_REQUEST, "Failed to verify Lemon Squeezy order state.");
         }
+    }
+
+    public List<LemonSqueezyOrder> listRecentOrders() {
+        assertConfigured();
+
+        try {
+            return parseOrders(RestClient.builder()
+                    .baseUrl(properties.getApiBaseUrl())
+                    .defaultHeader("Authorization", "Bearer " + properties.getApiKey())
+                    .defaultHeader("Accept", "application/vnd.api+json")
+                    .defaultHeader("Content-Type", "application/vnd.api+json")
+                    .build()
+                    .get()
+                    .uri(uriBuilder -> uriBuilder
+                            .path("/v1/orders")
+                            .queryParam("page[size]", 100)
+                            .build())
+                    .retrieve()
+                    .body(String.class));
+        } catch (RestClientResponseException exception) {
+            throw providerException(exception);
+        } catch (BusinessException exception) {
+            throw exception;
+        } catch (Exception exception) {
+            throw new BusinessException(ErrorCode.INVALID_REQUEST, "Failed to verify Lemon Squeezy order state.");
+        }
+    }
+
+    private List<LemonSqueezyOrder> parseOrders(String response) throws Exception {
+        JsonNode root = objectMapper.readTree(response);
+        JsonNode data = root.path("data");
+        if (!data.isArray()) {
+            return List.of();
+        }
+
+        List<LemonSqueezyOrder> orders = new ArrayList<>();
+        data.forEach(item -> orders.add(parseOrder(item)));
+        return orders;
     }
 
     private Map<String, Object> productOptions(Payment payment) {

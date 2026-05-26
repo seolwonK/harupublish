@@ -129,8 +129,11 @@ public class PaymentService {
 
         try {
             JsonNode root = objectMapper.readTree(rawBody);
+            String resolvedEventName = StringUtils.hasText(eventName)
+                    ? eventName
+                    : root.path("meta").path("event_name").asText("");
             JsonNode customData = root.path("meta").path("custom_data");
-            Long paymentId = customData.hasNonNull("payment_id") ? customData.path("payment_id").asLong() : null;
+            Long paymentId = paymentIdFrom(customData.path("payment_id"));
             if (paymentId == null) {
                 throw new BusinessException(ErrorCode.INVALID_REQUEST, "Webhook custom_data.payment_id is missing.");
             }
@@ -144,11 +147,11 @@ public class PaymentService {
             boolean refunded = attributes.path("refunded").asBoolean(false);
             String status = attributes.path("status").asText("");
 
-            if ("order_refunded".equals(eventName) || refunded) {
+            if ("order_refunded".equals(resolvedEventName) || refunded) {
                 payment.markRefundedByProvider(orderId, orderIdentifier);
                 return;
             }
-            if ("order_created".equals(eventName) || "order_updated".equals(eventName)) {
+            if ("order_created".equals(resolvedEventName) || "order_updated".equals(resolvedEventName)) {
                 if ("paid".equalsIgnoreCase(status)) {
                     payment.markPaidByProvider(orderId, orderIdentifier);
                 } else if ("failed".equalsIgnoreCase(status)) {
@@ -159,6 +162,24 @@ public class PaymentService {
             throw exception;
         } catch (Exception exception) {
             throw new BusinessException(ErrorCode.INVALID_REQUEST, "Invalid Lemon Squeezy webhook payload.");
+        }
+    }
+
+    private Long paymentIdFrom(JsonNode node) {
+        if (node == null || node.isMissingNode() || node.isNull()) {
+            return null;
+        }
+        if (node.isNumber()) {
+            return node.asLong();
+        }
+        String value = node.asText("");
+        if (!StringUtils.hasText(value)) {
+            return null;
+        }
+        try {
+            return Long.parseLong(value);
+        } catch (NumberFormatException exception) {
+            return null;
         }
     }
 
@@ -192,14 +213,25 @@ public class PaymentService {
 
         List<LemonSqueezyOrder> userOrders = lemonSqueezyClient.listOrdersByUserEmail(pendingPayments.get(0).getStudent().getEmail());
         pendingPayments.forEach(payment -> syncPaymentStatus(payment, userOrders));
+
+        List<Payment> stillPending = pendingPayments.stream()
+                .filter(payment -> payment.getStatus() == PaymentStatus.PENDING)
+                .toList();
+        if (!stillPending.isEmpty()) {
+            List<LemonSqueezyOrder> recentOrders = lemonSqueezyClient.listRecentOrders();
+            stillPending.forEach(payment -> syncPaymentStatus(payment, recentOrders));
+        }
     }
 
     private void syncPaymentStatus(Payment payment) {
+        if (!canSyncPaymentStatus(payment)) {
+            return;
+        }
         syncPaymentStatus(payment, lemonSqueezyClient.listOrdersByUserEmail(payment.getStudent().getEmail()));
     }
 
     private void syncPaymentStatus(Payment payment, List<LemonSqueezyOrder> userOrders) {
-        if (payment.getStatus() != PaymentStatus.PENDING || payment.getPaymentMethod() != PaymentMethod.LEMON_SQUEEZY) {
+        if (!canSyncPaymentStatus(payment)) {
             return;
         }
 
@@ -208,6 +240,11 @@ public class PaymentService {
                 : findMatchingOrder(payment, userOrders);
 
         matchedOrder.ifPresent(order -> applyProviderOrder(payment, order));
+    }
+
+    private boolean canSyncPaymentStatus(Payment payment) {
+        return payment.getStatus() == PaymentStatus.PENDING
+                && payment.getPaymentMethod() == PaymentMethod.LEMON_SQUEEZY;
     }
 
     private Optional<LemonSqueezyOrder> findMatchingOrder(Payment payment, List<LemonSqueezyOrder> userOrders) {
@@ -226,7 +263,8 @@ public class PaymentService {
     }
 
     private boolean matchesExpectedTotal(LemonSqueezyOrder order, long expectedProviderTotal) {
-        return Math.abs(order.total() - expectedProviderTotal) <= 1000L;
+        return Math.abs(order.total() - expectedProviderTotal) <= 1000L
+                || (order.totalUsd() > 0 && Math.abs(order.totalUsd() - expectedProviderTotal) <= 1000L);
     }
 
     private void applyProviderOrder(Payment payment, LemonSqueezyOrder order) {
