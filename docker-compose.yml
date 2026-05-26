@@ -36,6 +36,8 @@ services:
       HARU_JWT_REFRESH_TOKEN_EXPIRATION_DAYS: 14
     ports:
       - "8080:8080"
+    volumes:
+      - haru-uploads:/app/uploads
     depends_on:
       mysql:
         condition: service_healthy
@@ -43,3 +45,4 @@ services:
 
 volumes:
   haru-mysql-data:
+  haru-uploads:
