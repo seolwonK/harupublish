@@ -344,6 +344,15 @@ textarea:focus-visible {
   font-weight: 800;
 }
 
+.app-header nav a {
+  border-radius: 999px;
+  padding: 8px 2px;
+}
+
+.app-header nav a.selected {
+  color: var(--brand-dark);
+}
+
 .header-actions {
   display: flex;
   align-items: center;
@@ -501,13 +510,18 @@ textarea:focus-visible {
   color: var(--brand);
 }
 
-.hero-search span {
+.hero-search input {
   min-width: 0;
+  width: 100%;
+  border: 0;
+  outline: 0;
+  background: transparent;
   color: var(--muted);
   font-size: 14px;
+  font-weight: 600;
 }
 
-.hero-search a,
+.hero-search button,
 .home-tutor-actions .primary {
   display: inline-flex;
   align-items: center;
@@ -520,6 +534,7 @@ textarea:focus-visible {
   padding: 0 18px;
   font-size: 13px;
   font-weight: 850;
+  border: 0;
 }
 
 .category-row {
@@ -924,6 +939,32 @@ textarea:focus-visible {
   color: var(--brand-dark);
 }
 
+.play-button.disabled {
+  pointer-events: none;
+  opacity: 0.72;
+}
+
+.profile-video-frame,
+.video-preview iframe {
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+
+.profile-video-frame {
+  position: absolute;
+  inset: 0;
+}
+
+.video-preview {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #111827;
+}
+
 .profile-summary h1 {
   margin: 14px 0 10px;
   font-size: clamp(32px, 5vw, 52px);
@@ -1114,6 +1155,39 @@ hr {
 
 .review {
   align-items: flex-start;
+}
+
+.review-compose {
+  display: grid;
+  gap: 12px;
+  margin: -4px 0 14px 62px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fffdf9;
+  padding: 14px;
+}
+
+.review-compose label {
+  display: grid;
+  gap: 7px;
+  color: #454b55;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.review-compose select,
+.review-compose textarea {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #ffffff;
+  color: var(--ink);
+  padding: 10px 12px;
+}
+
+.review-compose textarea {
+  min-height: 96px;
+  resize: vertical;
 }
 
 .review strong,
@@ -1883,6 +1957,19 @@ th {
   padding: 28px;
 }
 
+.auth-panel h1,
+.auth-panel h2 {
+  margin: 0 0 8px;
+  line-height: 1.25;
+}
+
+.auth-panel > p {
+  margin: 0 0 22px;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
 .account-grid,
 .profile-workspace {
   display: grid;
@@ -1907,6 +1994,173 @@ th {
 .profile-guide,
 .payments-panel {
   padding: 22px;
+}
+
+.tutor-setup-card {
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1fr) auto;
+  gap: 16px;
+  align-items: center;
+}
+
+.tutor-profile-form {
+  gap: 18px;
+}
+
+.form-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-top: 1px solid var(--line);
+  padding-top: 18px;
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 900;
+}
+
+.form-section-head:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.form-section-head strong {
+  border-radius: 999px;
+  background: var(--brand-soft);
+  color: var(--brand-dark);
+  padding: 5px 9px;
+  font-size: 11px;
+}
+
+.form-section-head strong.optional {
+  background: #eef2f7;
+  color: #536171;
+}
+
+.optional-media-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.file-drop {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 74px;
+  border: 1px dashed rgba(255, 138, 61, 0.55);
+  border-radius: 8px;
+  background: var(--brand-soft);
+  color: var(--brand-dark);
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.file-drop input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.file-drop:has(input:disabled) {
+  opacity: 0.65;
+  cursor: progress;
+}
+
+.url-input {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: #ffffff;
+  padding: 0 12px;
+}
+
+.url-input svg {
+  color: var(--muted);
+}
+
+.url-input input {
+  border: 0;
+  padding-inline: 0;
+}
+
+.image-upload-preview {
+  display: grid;
+  grid-template-columns: 74px minmax(0, auto);
+  gap: 10px;
+  align-items: center;
+  margin-top: 10px;
+}
+
+.image-upload-preview img {
+  width: 74px;
+  height: 74px;
+  border-radius: 8px;
+  object-fit: cover;
+  background: var(--brand-soft);
+}
+
+.sticky-form-actions {
+  position: sticky;
+  bottom: 12px;
+  z-index: 2;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.94);
+  padding: 12px;
+  backdrop-filter: blur(10px);
+}
+
+.tutor-profile-guide {
+  position: sticky;
+  top: 20px;
+}
+
+.profile-checklist {
+  display: grid;
+  gap: 10px;
+  margin: 18px 0;
+}
+
+.profile-checklist p {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.profile-checklist p.done {
+  color: #24734d;
+}
+
+.guide-callout {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #f8fafc;
+  padding: 14px;
+  margin-top: 12px;
+}
+
+.guide-callout strong {
+  display: block;
+  margin-bottom: 6px;
+}
+
+.guide-callout p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.55;
 }
 
 .payment-list {
@@ -2340,6 +2594,7 @@ th {
   .app-header {
     position: relative;
     grid-template-columns: 1fr;
+    gap: 12px;
     padding: 16px 20px;
   }
 
@@ -2347,6 +2602,34 @@ th {
   .header-actions {
     justify-content: flex-start;
     flex-wrap: wrap;
+  }
+
+  .app-header nav {
+    gap: 8px;
+  }
+
+  .app-header nav a {
+    border: 1px solid var(--line);
+    background: white;
+    padding: 9px 11px;
+    font-size: 12px;
+  }
+
+  .section-header,
+  .section-title-row,
+  .panel-head {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .section-action {
+    width: 100%;
+  }
+
+  .section-action .ui-button {
+    width: 100%;
+    min-width: 0;
+    white-space: normal;
   }
 
   .home-notices,
@@ -2382,6 +2665,7 @@ th {
   .form-two-col,
   .account-grid,
   .profile-workspace,
+  .optional-media-grid,
   .payments-layout {
     grid-template-columns: 1fr;
   }
@@ -2390,13 +2674,18 @@ th {
     padding: 14px;
   }
 
-  .hero-search a,
+  .hero-search button,
   .secondary-cta {
     width: 100%;
   }
 
   .upcoming-lesson-row {
     grid-template-columns: 54px minmax(0, 1fr);
+  }
+
+  .upcoming-lesson-row .ui-button {
+    grid-column: 1 / -1;
+    width: 100%;
   }
 
   .home-tutor-card.featured {
@@ -2412,9 +2701,19 @@ th {
 
   .next-action-card,
   .admin-action-card,
+  .tutor-setup-card,
   .dashboard-head,
   .admin-title {
     flex-direction: column;
+    grid-template-columns: 1fr;
+  }
+
+  .tutor-profile-guide {
+    position: static;
+  }
+
+  .sticky-form-actions {
+    position: static;
   }
 
   table {

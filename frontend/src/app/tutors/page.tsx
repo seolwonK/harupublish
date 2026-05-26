@@ -17,7 +17,9 @@ function priceLabel(tutor: ExpertListResponse) {
 
 export default function TutorsPage() {
   const [tutors, setTutors] = useState<ExpertListResponse[]>([]);
-  const [query, setQuery] = useState("");
+  const [query, setQuery] = useState(() =>
+    typeof window === "undefined" ? "" : new URLSearchParams(window.location.search).get("q") ?? ""
+  );
   const [category, setCategory] = useState("ALL");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -91,13 +93,21 @@ export default function TutorsPage() {
       <section className="tutors-list-grid" aria-label="전체 튜터 목록">
         {filteredTutors.map((tutor) => (
           <article className="tutors-list-card" key={tutor.tutorProfileId}>
-            <img src={tutorImage(tutor)} alt={`${tutor.displayName ?? "Haru 튜터"} 프로필`} />
+            <img
+              src={tutorImage(tutor)}
+              alt={`${tutor.displayName ?? "Haru 튜터"} 프로필`}
+              onError={(event) => {
+                if (event.currentTarget.src !== new URL(DEFAULT_TUTOR_IMAGE, window.location.origin).toString()) {
+                  event.currentTarget.src = DEFAULT_TUTOR_IMAGE;
+                }
+              }}
+            />
             <div className="tutors-list-content">
               <div className="tutors-list-head">
                 <Badge tone="brand">{categoryLabel(tutor.category)}</Badge>
                 <span className="tutors-rating">
                   <Star size={14} fill="currentColor" />
-                  4.9
+                  {(tutor.reviewCount ?? 0) > 0 ? `${Number(tutor.averageRating ?? 0).toFixed(1)} (${tutor.reviewCount})` : "신규"}
                 </span>
               </div>
               <h2>{tutor.displayName ?? "Haru 튜터"}</h2>

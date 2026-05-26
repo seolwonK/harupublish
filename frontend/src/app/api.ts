@@ -50,6 +50,8 @@ export type ExpertListResponse = {
   availableLanguages: string[] | null;
   lessonPrice25Amount: number | string | null;
   lessonPrice50Amount: number | string | null;
+  averageRating: number | null;
+  reviewCount: number | null;
 };
 
 export type TutorProfileResponse = {
@@ -137,6 +139,24 @@ export type BookingJoinResponse = {
   expiresAt: string | null;
 };
 
+export type ReviewResponse = {
+  id: number;
+  bookingId: number | null;
+  tutorProfileId: number;
+  studentUserId: number | null;
+  reviewerName: string;
+  rating: number;
+  body: string;
+  createdAt: string;
+};
+
+export type ReviewListResponse = {
+  tutorProfileId: number;
+  averageRating: number;
+  reviewCount: number;
+  reviews: ReviewResponse[];
+};
+
 export type PaymentResponse = {
   id: number;
   studentUserId: number;
@@ -172,6 +192,7 @@ export type SessionTokens = {
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8080";
 const API_ORIGIN = new URL(API_BASE_URL).origin;
+const REQUEST_TIMEOUT_MS = 8000;
 
 export class HaruApiError extends Error {
   code: string;
@@ -215,6 +236,8 @@ function buildUrl(path: string, query?: RequestOptions["query"]) {
 
 export async function apiRequest<T>(path: string, options: RequestOptions = {}): Promise<T> {
   let response: Response;
+  const controller = new AbortController();
+  const timeoutId = globalThis.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 
   try {
     response = await fetch(buildUrl(path, options.query), {
@@ -223,7 +246,8 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
         ...(options.body === undefined ? {} : { "Content-Type": "application/json" }),
         ...(options.token ? { Authorization: `Bearer ${options.token}` } : {})
       },
-      body: options.body === undefined ? undefined : JSON.stringify(options.body)
+      body: options.body === undefined ? undefined : JSON.stringify(options.body),
+      signal: controller.signal
     });
   } catch {
     throw new HaruApiError(
@@ -231,6 +255,8 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
       "NETWORK_ERROR",
       0
     );
+  } finally {
+    globalThis.clearTimeout(timeoutId);
   }
 
   const payload = (await response.json().catch(() => null)) as ApiResponse<T> | ApiErrorResponse | null;
@@ -269,6 +295,35 @@ export function resolveAssetUrl(value: string | null | undefined) {
   if (!value) return null;
   if (value.startsWith("/")) return `${API_ORIGIN}${value}`;
   return value;
+}
+
+export function youtubeEmbedUrl(value: string | null | undefined) {
+  if (!value?.trim()) return null;
+
+  try {
+    const url = new URL(value.trim());
+    const host = url.hostname.replace(/^www\./, "");
+    let videoId: string | null = null;
+
+    if (host === "youtu.be") {
+      videoId = url.pathname.split("/").filter(Boolean)[0] ?? null;
+    } else if (host === "youtube.com" || host === "m.youtube.com" || host === "youtube-nocookie.com") {
+      if (url.pathname === "/watch") videoId = url.searchParams.get("v");
+      if (url.pathname.startsWith("/shorts/") || url.pathname.startsWith("/embed/")) {
+        videoId = url.pathname.split("/").filter(Boolean)[1] ?? null;
+      }
+    }
+
+    if (!videoId || !/^[a-zA-Z0-9_-]{6,20}$/.test(videoId)) return null;
+    return `https://www.youtube.com/embed/${videoId}`;
+  } catch {
+    return null;
+  }
+}
+
+export function isYoutubeUrl(value: string | null | undefined) {
+  if (!value?.trim()) return true;
+  return youtubeEmbedUrl(value) !== null;
 }
 
 export const haruApi = {
@@ -348,6 +403,12 @@ export const haruApi = {
   },
   joinBooking(token: string, bookingId: number) {
     return apiRequest<BookingJoinResponse>(`/api/bookings/${bookingId}/join`, { token });
+  },
+  createReview(token: string, bookingId: number, body: { rating: number; body: string }) {
+    return apiRequest<ReviewResponse>(`/api/bookings/${bookingId}/reviews`, { method: "POST", token, body });
+  },
+  getTutorReviews(tutorProfileId: number) {
+    return apiRequest<ReviewListResponse>(`/api/tutors/${tutorProfileId}/reviews`);
   },
   createCheckout(token: string, body: { tutorProfileId: number; lessonDurationMinutes: number; lessonPackCount: number; paymentMethod: PaymentMethod }) {
     return apiRequest<PaymentResponse>("/api/payments/checkout", { method: "POST", token, body });

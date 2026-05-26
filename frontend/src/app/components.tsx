@@ -158,7 +158,16 @@ export function Rating({ value, reviews }: { value: number; reviews?: number }) 
 
 export function AppHeader() {
   const { user, logout } = useAuth();
+  const pathname = usePathname();
   const isAdmin = user?.roles.includes("ADMIN");
+  const navItems = [
+    ["튜터 찾기", "/tutors"],
+    ["내 예약", "/bookings"],
+    ["결제", "/payments"],
+    ["튜터 센터", "/tutor/dashboard"],
+    ...(isAdmin ? [["관리자", "/admin"]] : []),
+    ["채팅", "/chat"]
+  ];
 
   return (
     <header className="app-header">
@@ -166,12 +175,11 @@ export function AppHeader() {
         <BrandLogo />
       </a>
       <nav aria-label="주요 메뉴">
-        <a href="/tutors">튜터 찾기</a>
-        <a href="/bookings">내 예약</a>
-        <a href="/payments">결제</a>
-        <a href="/tutor/dashboard">튜터 센터</a>
-        {isAdmin ? <a href="/admin">관리자</a> : null}
-        <a href="/chat">채팅</a>
+        {navItems.map(([label, href]) => (
+          <a className={pathname === href ? "selected" : ""} href={href} key={href} aria-current={pathname === href ? "page" : undefined}>
+            {label}
+          </a>
+        ))}
       </nav>
       <div className="header-actions">
         <div className="lang-toggle" aria-label="언어 선택">
@@ -182,6 +190,8 @@ export function AppHeader() {
           <>
             <a href="/account">{user.name}</a>
             <button onClick={() => void logout()}>로그아웃</button>
+            <Bell size={18} aria-hidden />
+            <Avatar label={user.name?.slice(0, 1) ?? "H"} />
           </>
         ) : (
           <>
@@ -191,8 +201,6 @@ export function AppHeader() {
             </a>
           </>
         )}
-        <Bell size={18} aria-hidden />
-        <Avatar label={user?.name?.slice(0, 1) ?? "H"} />
       </div>
     </header>
   );
@@ -288,7 +296,7 @@ export function ExpertCard({ tutor }: { tutor: ExpertListResponse }) {
         <Badge tone="brand">{categoryLabel(tutor.category)}</Badge>
         <h3>{tutor.displayName ?? "Haru 튜터"}</h3>
         <p>{tutor.shortIntroduction ?? "한국어와 한국 문화를 함께 알려드려요."}</p>
-        <Rating value={4.9} reviews={128} />
+        {(tutor.reviewCount ?? 0) > 0 ? <Rating value={tutor.averageRating ?? 0} reviews={tutor.reviewCount ?? 0} /> : <span className="muted">아직 리뷰 없음</span>}
         <span className="muted">{(tutor.availableLanguages ?? ["한국어"]).join(" · ")}</span>
         <strong>25분 {toMoney(tutor.lessonPrice25Amount)}</strong>
       </div>

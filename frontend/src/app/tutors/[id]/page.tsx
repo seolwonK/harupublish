@@ -2,10 +2,10 @@
 
 import { CalendarDays, CheckCircle2, Globe2, MapPin, MessageCircle, Play, ShieldCheck, Video } from "lucide-react";
 import { use, useEffect, useMemo, useState } from "react";
-import { dateRangeFromToday, HaruApiError, haruApi, ScheduleSlotResponse, toMoney, TutorProfileResponse } from "../../api";
+import { dateRangeFromToday, HaruApiError, haruApi, ReviewListResponse, ScheduleSlotResponse, toMoney, TutorProfileResponse, youtubeEmbedUrl } from "../../api";
 import { useAuth } from "../../auth";
-import { ApiNotice, Avatar, Badge, Button, categoryLabel, EmptyState, IconMeta, Rating, SectionHeader, TimePill, TutorPortrait } from "../../components";
-import { reviews, tutors } from "../../data";
+import { ApiNotice, AppHeader, Avatar, Badge, Button, categoryLabel, EmptyState, IconMeta, Rating, SectionHeader, TimePill, TutorPortrait } from "../../components";
+import { tutors } from "../../data";
 
 function formatDate(value: string) {
   return new Date(value).toLocaleDateString("ko-KR", { month: "long", day: "numeric", weekday: "short" });
@@ -21,6 +21,7 @@ export default function TutorProfilePage({ params }: { params: Promise<{ id: str
   const { accessToken } = useAuth();
   const [tutor, setTutor] = useState<TutorProfileResponse | null>(null);
   const [slots, setSlots] = useState<ScheduleSlotResponse[]>([]);
+  const [reviewSummary, setReviewSummary] = useState<ReviewListResponse | null>(null);
   const [selectedSlotId, setSelectedSlotId] = useState<number | null>(null);
   const [loading, setLoading] = useState(Number.isFinite(numericId));
   const [actionLoading, setActionLoading] = useState(false);
@@ -36,10 +37,11 @@ export default function TutorProfilePage({ params }: { params: Promise<{ id: str
     }
 
     const range = dateRangeFromToday(30);
-    Promise.all([haruApi.getTutor(numericId), haruApi.getPublicSchedule(numericId, range.from, range.to)])
-      .then(([profile, schedule]) => {
+    Promise.all([haruApi.getTutor(numericId), haruApi.getPublicSchedule(numericId, range.from, range.to), haruApi.getTutorReviews(numericId)])
+      .then(([profile, schedule, reviews]) => {
         setTutor(profile);
         setSlots(schedule.slots);
+        setReviewSummary(reviews);
         setSelectedSlotId(schedule.slots.find((slot) => !slot.booked)?.id ?? null);
       })
       .catch((err: Error) => setError(err.message))
@@ -50,6 +52,9 @@ export default function TutorProfilePage({ params }: { params: Promise<{ id: str
   const languages = tutor?.availableLanguages?.join(" · ") ?? mockTutor.languages;
   const profileIntro = tutor?.shortIntroduction ?? "목표와 관심사에 맞춰 한국어 회화와 문화를 함께 알려주는 튜터입니다.";
   const profileImageUrl = tutor?.profileImageUrl || tutor?.thumbnailUrl;
+  const introVideoEmbedUrl = youtubeEmbedUrl(tutor?.introVideoUrl);
+  const averageRating = reviewSummary?.reviewCount ? reviewSummary.averageRating : 0;
+  const reviewCount = reviewSummary?.reviewCount ?? 0;
   const selectedSlot = useMemo(() => slots.find((slot) => slot.id === selectedSlotId), [selectedSlotId, slots]);
   const selectedDate = selectedSlot ? formatDate(selectedSlot.startAt) : null;
   const slotDates = useMemo(() => Array.from(new Set(slots.map((slot) => formatDate(slot.startAt)))).slice(0, 6), [slots]);
@@ -112,19 +117,33 @@ export default function TutorProfilePage({ params }: { params: Promise<{ id: str
 
   return (
     <main className="profile-page page-shell compact">
+      <AppHeader />
       <section className="profile-hero panel">
         <div className="profile-photo">
-          <TutorPortrait imageUrl={profileImageUrl} label={displayName.slice(0, 1)} large />
-          <button className="play-button" aria-label="소개 영상 재생">
-            <Play size={24} fill="currentColor" />
-          </button>
+          {introVideoEmbedUrl ? (
+            <iframe
+              className="profile-video-frame"
+              src={introVideoEmbedUrl}
+              title={`${displayName} 소개 영상`}
+              loading="lazy"
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+              allowFullScreen
+            />
+          ) : (
+            <>
+              <TutorPortrait imageUrl={profileImageUrl} label={displayName.slice(0, 1)} large />
+              <span className="play-button disabled" aria-hidden="true">
+                <Play size={24} fill="currentColor" />
+              </span>
+            </>
+          )}
         </div>
         <div className="profile-summary">
           <Badge tone="brand">{categoryLabel(tutor?.category)}</Badge>
           <h1>{displayName}</h1>
           <p>{profileIntro}</p>
           <div className="profile-meta-row">
-            <Rating value={4.9} reviews={128} />
+            {reviewCount > 0 ? <Rating value={averageRating} reviews={reviewCount} /> : <span className="muted">아직 리뷰가 없습니다</span>}
             <IconMeta icon={MapPin}>온라인 수업</IconMeta>
             <IconMeta icon={Globe2}>{languages}</IconMeta>
           </div>
@@ -169,20 +188,28 @@ export default function TutorProfilePage({ params }: { params: Promise<{ id: str
           </div>
 
           <hr />
-          <SectionHeader eyebrow="Reviews" title="학생 후기" action={<Rating value={4.9} />} />
-          <div className="review-list">
-            {reviews.map((review) => (
-              <article className="review" key={review.name}>
-                <Avatar label={review.avatar} />
-                <div>
-                  <strong>{review.name}</strong>
-                  <Rating value={5} />
-                  <p>{review.body}</p>
-                  <span>{review.date}</span>
-                </div>
-              </article>
-            ))}
-          </div>
+          <SectionHeader
+            eyebrow="Reviews"
+            title="학생 후기"
+            action={reviewCount > 0 ? <Rating value={averageRating} reviews={reviewCount} /> : null}
+          />
+          {reviewCount === 0 ? (
+            <EmptyState title="아직 공개된 후기가 없습니다" body="완료한 수업의 학생 후기가 작성되면 이곳에 표시됩니다." />
+          ) : (
+            <div className="review-list">
+              {reviewSummary?.reviews.map((review) => (
+                <article className="review" key={review.id}>
+                  <Avatar label={review.reviewerName.slice(0, 1)} />
+                  <div>
+                    <strong>{review.reviewerName}</strong>
+                    <Rating value={review.rating} />
+                    <p>{review.body}</p>
+                    <span>{new Date(review.createdAt).toLocaleDateString("ko-KR")}</span>
+                  </div>
+                </article>
+              ))}
+            </div>
+          )}
         </div>
 
         <aside className="booking-panel panel" id="booking">

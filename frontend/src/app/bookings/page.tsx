@@ -37,6 +37,11 @@ export default function BookingsPage() {
   const [bookings, setBookings] = useState<BookingResponse[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
+  const [reviewBookingId, setReviewBookingId] = useState<number | null>(null);
+  const [reviewRating, setReviewRating] = useState(5);
+  const [reviewBody, setReviewBody] = useState("");
+  const [reviewSubmitting, setReviewSubmitting] = useState(false);
 
   function loadBookings() {
     if (!accessToken) return;
@@ -70,6 +75,24 @@ export default function BookingsPage() {
     }
   }
 
+  async function submitReview() {
+    if (!accessToken || !reviewBookingId) return;
+    setError(null);
+    setMessage(null);
+    setReviewSubmitting(true);
+    try {
+      await haruApi.createReview(accessToken, reviewBookingId, { rating: reviewRating, body: reviewBody });
+      setMessage("후기가 등록되었습니다. 튜터 공개 프로필에 반영됩니다.");
+      setReviewBookingId(null);
+      setReviewRating(5);
+      setReviewBody("");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "후기 등록에 실패했습니다.");
+    } finally {
+      setReviewSubmitting(false);
+    }
+  }
+
   return (
     <main className="bookings-layout page-shell compact refined-bookings">
       <div className="bookings-header-wrap">
@@ -90,6 +113,7 @@ export default function BookingsPage() {
 
       <section className="bookings-column">
         {error ? <ApiNotice type="error">{error}</ApiNotice> : null}
+        {message ? <ApiNotice type="success">{message}</ApiNotice> : null}
         {!authLoading && !accessToken ? (
           <section className="panel booking-empty-panel">
             <EmptyState title="로그인이 필요합니다" body="내 예약과 Jitsi 수업방을 확인하려면 먼저 로그인해 주세요." />
@@ -137,7 +161,42 @@ export default function BookingsPage() {
           <SectionHeader eyebrow="History" title="완료/취소된 수업" />
           <div className="booking-card-list">
             {[...completed, ...cancelled].map((booking) => (
-              <BookingCard booking={booking} key={booking.id} />
+              <div key={booking.id}>
+                <BookingCard
+                  booking={booking}
+                  onReview={booking.status === "COMPLETED" ? () => {
+                    setReviewBookingId(booking.id);
+                    setReviewRating(5);
+                    setReviewBody("");
+                  } : undefined}
+                />
+                {reviewBookingId === booking.id ? (
+                  <div className="review-compose">
+                    <label>
+                      별점
+                      <select value={reviewRating} onChange={(event) => setReviewRating(Number(event.target.value))}>
+                        <option value={5}>5</option>
+                        <option value={4}>4</option>
+                        <option value={3}>3</option>
+                        <option value={2}>2</option>
+                        <option value={1}>1</option>
+                      </select>
+                    </label>
+                    <label>
+                      후기
+                      <textarea value={reviewBody} onChange={(event) => setReviewBody(event.target.value)} placeholder="수업에서 좋았던 점을 적어주세요." />
+                    </label>
+                    <div className="button-row">
+                      <Button onClick={() => void submitReview()} disabled={reviewSubmitting || !reviewBody.trim()}>
+                        후기 등록
+                      </Button>
+                      <Button variant="secondary" onClick={() => setReviewBookingId(null)}>
+                        취소
+                      </Button>
+                    </div>
+                  </div>
+                ) : null}
+              </div>
             ))}
           </div>
           {!authLoading && completed.length + cancelled.length === 0 ? <EmptyState title="지난 수업이 없습니다" body="완료되거나 취소된 수업이 여기에 표시됩니다." /> : null}
@@ -171,7 +230,7 @@ function NextLessonCard({ booking }: { booking: BookingResponse }) {
   );
 }
 
-function BookingCard({ booking, onCancel }: { booking: BookingResponse; onCancel?: () => void }) {
+function BookingCard({ booking, onCancel, onReview }: { booking: BookingResponse; onCancel?: () => void; onReview?: () => void }) {
   const { date, time } = formatDateTime(booking.startAt);
   const isReserved = booking.status === "RESERVED";
   return (
@@ -201,6 +260,11 @@ function BookingCard({ booking, onCancel }: { booking: BookingResponse; onCancel
         {onCancel ? (
           <Button variant="secondary" onClick={onCancel}>
             취소하기
+          </Button>
+        ) : null}
+        {onReview ? (
+          <Button variant="secondary" onClick={onReview}>
+            후기 작성
           </Button>
         ) : null}
       </div>

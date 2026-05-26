@@ -16,10 +16,12 @@ public record ExpertListResponse(
         String thumbnailUrl,
         List<String> availableLanguages,
         BigDecimal lessonPrice25Amount,
-        BigDecimal lessonPrice50Amount
+        BigDecimal lessonPrice50Amount,
+        Double averageRating,
+        Integer reviewCount
 ) {
 
-    public static ExpertListResponse from(TutorProfile profile) {
+    public static ExpertListResponse from(TutorProfile profile, Double averageRating, Integer reviewCount) {
         return new ExpertListResponse(
                 profile.getId(),
                 profile.getUser().getId(),
@@ -30,7 +32,9 @@ public record ExpertListResponse(
                 profile.getThumbnailUrl(),
                 profile.getAvailableLanguages(),
                 profile.getLessonPrice25Amount(),
-                profile.getLessonPrice50Amount()
+                profile.getLessonPrice50Amount(),
+                averageRating,
+                reviewCount
         );
     }
 }

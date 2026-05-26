@@ -1,6 +1,7 @@
 package com.haru.tutor.application;
 
 import com.haru.common.exception.NotFoundException;
+import com.haru.review.infra.ReviewRepository;
 import com.haru.tutor.api.dto.ExpertListResponse;
 import com.haru.tutor.api.dto.TutorProfileRequest;
 import com.haru.tutor.api.dto.TutorProfileResponse;
@@ -20,10 +21,12 @@ public class TutorService {
 
     private final UserService userService;
     private final TutorProfileRepository tutorProfileRepository;
+    private final ReviewRepository reviewRepository;
 
-    public TutorService(UserService userService, TutorProfileRepository tutorProfileRepository) {
+    public TutorService(UserService userService, TutorProfileRepository tutorProfileRepository, ReviewRepository reviewRepository) {
         this.userService = userService;
         this.tutorProfileRepository = tutorProfileRepository;
+        this.reviewRepository = reviewRepository;
     }
 
     @Transactional
@@ -88,7 +91,11 @@ public class TutorService {
     public List<ExpertListResponse> getApprovedExperts() {
         return tutorProfileRepository.findAllByStatusOrderByApprovedAtDesc(TutorProfileStatus.APPROVED)
                 .stream()
-                .map(ExpertListResponse::from)
+                .map(profile -> ExpertListResponse.from(
+                        profile,
+                        roundedAverageRating(profile.getId()),
+                        reviewRepository.countByTutorProfileIdAndVisibleTrue(profile.getId())
+                ))
                 .toList();
     }
 
@@ -115,5 +122,13 @@ public class TutorService {
     private TutorProfile getProfile(Long tutorProfileId) {
         return tutorProfileRepository.findById(tutorProfileId)
                 .orElseThrow(() -> new NotFoundException("Tutor profile was not found."));
+    }
+
+    private Double roundedAverageRating(Long tutorProfileId) {
+        Double average = reviewRepository.averageRatingByTutorProfileId(tutorProfileId);
+        if (average == null) {
+            return 0.0;
+        }
+        return Math.round(average * 10.0) / 10.0;
     }
 }
