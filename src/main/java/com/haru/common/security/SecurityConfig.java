@@ -21,6 +21,7 @@ import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
 import java.util.Arrays;
+import java.util.ArrayList;
 import java.util.List;
 
 @Configuration
@@ -38,10 +39,13 @@ public class SecurityConfig {
     ) {
         this.jwtAuthenticationFilter = jwtAuthenticationFilter;
         this.objectMapper = objectMapper;
-        this.corsAllowedOriginPatterns = Arrays.stream(corsAllowedOriginPatterns.split(","))
+        List<String> configuredPatterns = Arrays.stream(corsAllowedOriginPatterns.split(","))
                 .map(String::trim)
+                .map(SecurityConfig::stripWrappingQuotes)
+                .map(SecurityConfig::stripTrailingSlash)
                 .filter(origin -> !origin.isEmpty())
                 .toList();
+        this.corsAllowedOriginPatterns = withDefaultCorsPatterns(configuredPatterns);
     }
 
     @Bean
@@ -89,8 +93,9 @@ public class SecurityConfig {
         CorsConfiguration configuration = new CorsConfiguration();
         configuration.setAllowedOriginPatterns(corsAllowedOriginPatterns);
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
-        configuration.setAllowedHeaders(List.of("Authorization", "Content-Type"));
+        configuration.setAllowedHeaders(List.of("*"));
         configuration.setAllowCredentials(false);
+        configuration.setMaxAge(3600L);
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", configuration);
@@ -101,5 +106,33 @@ public class SecurityConfig {
         response.setStatus(status);
         response.setContentType(MediaType.APPLICATION_JSON_VALUE);
         objectMapper.writeValue(response.getWriter(), ErrorResponse.of(code, message));
+    }
+
+    private static List<String> withDefaultCorsPatterns(List<String> configuredPatterns) {
+        List<String> patterns = new ArrayList<>(configuredPatterns);
+        addIfMissing(patterns, "https://*.vercel.app");
+        addIfMissing(patterns, "http://localhost:*");
+        addIfMissing(patterns, "http://127.0.0.1:*");
+        return List.copyOf(patterns);
+    }
+
+    private static void addIfMissing(List<String> patterns, String pattern) {
+        if (!patterns.contains(pattern)) {
+            patterns.add(pattern);
+        }
+    }
+
+    private static String stripWrappingQuotes(String value) {
+        if (value.length() >= 2 && value.startsWith("\"") && value.endsWith("\"")) {
+            return value.substring(1, value.length() - 1);
+        }
+        return value;
+    }
+
+    private static String stripTrailingSlash(String value) {
+        if (value.length() > "https://".length() && value.endsWith("/")) {
+            return value.substring(0, value.length() - 1);
+        }
+        return value;
     }
 }
