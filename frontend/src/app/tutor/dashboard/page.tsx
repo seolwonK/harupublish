@@ -1,8 +1,8 @@
 "use client";
 
-import { CalendarCheck, CheckCircle2, DollarSign, FileCheck2 } from "lucide-react";
-import { useEffect, useState } from "react";
-import { dateRangeFromToday, haruApi, ScheduleSlotResponse, TutorProfileResponse } from "../../api";
+import { CalendarCheck, CheckCircle2, Clock, DollarSign, FileCheck2, Video } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { BookingResponse, dateRangeFromToday, haruApi, ScheduleSlotResponse, TutorProfileResponse } from "../../api";
 import { useAuth } from "../../auth";
 import { ApiNotice, Avatar, Badge, Button, EmptyState, SectionHeader, Sidebar, StatCard, statusLabel } from "../../components";
 
@@ -15,6 +15,7 @@ export default function TutorDashboardPage() {
   const { accessToken, user } = useAuth();
   const [profile, setProfile] = useState<TutorProfileResponse | null>(null);
   const [slots, setSlots] = useState<ScheduleSlotResponse[]>([]);
+  const [bookings, setBookings] = useState<BookingResponse[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -22,17 +23,29 @@ export default function TutorDashboardPage() {
     const range = dateRangeFromToday(30);
     Promise.all([
       haruApi.getMyTutorProfile(accessToken).catch(() => null),
-      haruApi.getMySchedule(accessToken, range.from, range.to).catch(() => ({ slots: [] }))
+      haruApi.getMySchedule(accessToken, range.from, range.to).catch(() => ({ slots: [] })),
+      haruApi.getMyBookings(accessToken, "tutor").catch(() => ({ bookings: [] }))
     ])
-      .then(([nextProfile, schedule]) => {
+      .then(([nextProfile, schedule, bookingResponse]) => {
         setProfile(nextProfile);
         setSlots(schedule.slots);
+        setBookings(bookingResponse.bookings);
       })
       .catch((err: Error) => setError(err.message));
   }, [accessToken]);
 
   const approved = (profile?.status ?? user?.tutorProfileStatus) === "APPROVED";
   const completion = profileCompletion(profile, slots.length);
+  const upcomingBookings = useMemo(
+    () => bookings.filter((booking) => booking.status === "RESERVED").sort((left, right) => new Date(left.startAt).getTime() - new Date(right.startAt).getTime()),
+    [bookings]
+  );
+  const completedBookings = useMemo(() => bookings.filter((booking) => booking.status === "COMPLETED"), [bookings]);
+  const todayBookingCount = useMemo(() => {
+    const today = new Date().toDateString();
+    return bookings.filter((booking) => new Date(booking.startAt).toDateString() === today).length;
+  }, [bookings]);
+  const nextBooking = upcomingBookings[0] ?? null;
   const nextActionTitle = approved ? "이번 주 가능한 수업 시간을 추가하세요" : "프로필을 작성하고 승인 요청을 보내세요";
   const nextActionBody = approved
     ? "학생은 공개된 시간에서만 예약할 수 있습니다. 비어 있는 시간을 먼저 채우면 예약 전환율이 올라갑니다."
@@ -57,11 +70,44 @@ export default function TutorDashboardPage() {
         {!accessToken ? <EmptyState title="로그인이 필요합니다" body="튜터 센터는 로그인 후 사용할 수 있습니다." /> : null}
 
         <div className="stats-grid">
-          <StatCard label="오늘 수업" value="0" hint="예약 집계 연동 예정" />
+          <StatCard label="오늘 수업" value={String(todayBookingCount)} hint="담당 수업 기준" />
           <StatCard label="공개 시간" value={String(slots.length)} hint="30일 내 등록된 슬롯" />
-          <StatCard label="완료 수업" value="0" hint="완료 예약 집계 예정" />
+          <StatCard label="완료 수업" value={String(completedBookings.length)} hint="완료된 담당 수업" />
           <StatCard label="예상 수익" value="USD 0.00" hint="정산 API 연동 예정" />
         </div>
+
+        {approved ? (
+          <section className="panel next-action-card tutor-live-card">
+            <div className="prep-icon">
+              <Video size={24} />
+            </div>
+            <div>
+              <Badge tone={nextBooking?.joinAvailable ? "green" : "orange"}>{nextBooking?.joinAvailable ? "입장 가능" : "다음 수업"}</Badge>
+              <h2>{nextBooking ? (nextBooking.studentName?.trim() || `학생 #${nextBooking.studentUserId}`) : "예정된 담당 수업이 없습니다"}</h2>
+              <p>
+                {nextBooking
+                  ? `${new Date(nextBooking.startAt).toLocaleDateString("ko-KR", { month: "long", day: "numeric", weekday: "short" })} ${new Date(nextBooking.startAt).toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" })} · ${nextBooking.lessonDurationMinutes}분`
+                  : "학생이 예약하면 이곳에서 바로 수업방 입장 또는 내 수업 이동이 가능합니다."}
+              </p>
+              {nextBooking ? <span className="tutor-live-meta"><Clock size={14} /> {nextBooking.joinAvailable ? "지금 바로 수업방에 입장할 수 있습니다." : "수업 시작 10분 전부터 수업방 입장이 열립니다."}</span> : null}
+            </div>
+            {nextBooking ? (
+              nextBooking.joinAvailable ? (
+                <Button as="a" href={`/bookings/${nextBooking.id}/classroom`}>
+                  <Video size={16} /> 수업방 열기
+                </Button>
+              ) : (
+                <Button as="a" href="/bookings" variant="secondary">
+                  내 수업 보기
+                </Button>
+              )
+            ) : (
+              <Button as="a" href="/tutor/schedule">
+                일정 관리
+              </Button>
+            )}
+          </section>
+        ) : null}
 
         <section className="panel next-action-card">
           <div className="prep-icon">

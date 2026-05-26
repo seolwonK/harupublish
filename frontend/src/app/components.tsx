@@ -9,6 +9,7 @@ import {
   CreditCard,
   Home,
   LayoutDashboard,
+  Loader2,
   MessageCircle,
   Search,
   Send,
@@ -16,12 +17,14 @@ import {
   ShieldCheck,
   Star,
   Users,
+  Video,
   Wallet
 } from "lucide-react";
 import { usePathname } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { useState } from "react";
-import type { ExpertListResponse } from "./api";
-import { resolveAssetUrl, toMoney } from "./api";
+import type { ExpertListResponse, Role } from "./api";
+import { haruApi, resolveAssetUrl, toMoney } from "./api";
 import { useAuth } from "./auth";
 import type { Booking, Tutor } from "./data";
 
@@ -156,18 +159,95 @@ export function Rating({ value, reviews }: { value: number; reviews?: number }) 
   );
 }
 
+function roleLabel(role: Role) {
+  if (role === "TUTOR") return "튜터 모드";
+  if (role === "ADMIN") return "관리자 모드";
+  return "학생 모드";
+}
+
+function roleHomePath(role: Role) {
+  if (role === "TUTOR") return "/tutor/dashboard";
+  if (role === "ADMIN") return "/admin";
+  return "/";
+}
+
+function isNavSelected(pathname: string, href: string) {
+  return pathname === href || (href !== "/" && pathname.startsWith(`${href}/`));
+}
+
+export function RoleModeSwitcher({ compact = false }: { compact?: boolean }) {
+  const router = useRouter();
+  const { user, accessToken, refreshMe } = useAuth();
+  const [loadingRole, setLoadingRole] = useState<Role | null>(null);
+
+  if (!user || !accessToken || user.roles.length <= 1) {
+    return null;
+  }
+
+  const currentUser = user;
+  const token = accessToken;
+
+  async function switchRole(role: Role) {
+    if (role === currentUser.activeRole) {
+      router.push(roleHomePath(role));
+      return;
+    }
+
+    setLoadingRole(role);
+    try {
+      await haruApi.changeActiveRole(token, role);
+      await refreshMe();
+      router.push(roleHomePath(role));
+    } finally {
+      setLoadingRole(null);
+    }
+  }
+
+  return (
+    <div className={cn("mode-switcher", compact && "mode-switcher-compact")} aria-label="모드 전환">
+      {currentUser.roles.map((role) => (
+        <button
+          className={cn("mode-switch-button", currentUser.activeRole === role && "selected")}
+          disabled={loadingRole !== null}
+          key={role}
+          onClick={() => void switchRole(role)}
+          type="button"
+        >
+          {loadingRole === role ? <Loader2 size={14} className="spin-icon" /> : null}
+          <span>{roleLabel(role)}</span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
 export function AppHeader() {
   const { user, logout } = useAuth();
   const pathname = usePathname();
   const isAdmin = user?.roles.includes("ADMIN");
-  const navItems = [
-    ["튜터 찾기", "/tutors"],
-    ["내 예약", "/bookings"],
-    ["결제", "/payments"],
-    ["튜터 센터", "/tutor/dashboard"],
-    ...(isAdmin ? [["관리자", "/admin"]] : []),
-    ["채팅", "/chat"]
-  ];
+  const navItems = user?.activeRole === "TUTOR"
+    ? [
+        ["튜터 센터", "/tutor/dashboard"],
+        ["내 수업", "/bookings"],
+        ["일정 관리", "/tutor/schedule"],
+        ["레슨 프로필", "/tutor/profile"],
+        ["채팅", "/chat"]
+      ]
+    : user?.activeRole === "ADMIN"
+      ? [
+          ["관리자 홈", "/admin"],
+          ["튜터 승인", "/admin/tutors"],
+          ["채팅", "/chat"],
+          ["계정", "/account"]
+        ]
+      : [
+          ["튜터 찾기", "/tutors"],
+          ["내 예약", "/bookings"],
+          ["결제", "/payments"],
+          ["튜터 센터", "/tutor/dashboard"],
+          ...(isAdmin ? [["관리자", "/admin"]] : []),
+          ["채팅", "/chat"]
+        ];
 
   return (
     <header className="app-header">
@@ -176,18 +256,15 @@ export function AppHeader() {
       </a>
       <nav aria-label="주요 메뉴">
         {navItems.map(([label, href]) => (
-          <a className={pathname === href ? "selected" : ""} href={href} key={href} aria-current={pathname === href ? "page" : undefined}>
+          <a className={isNavSelected(pathname, href) ? "selected" : ""} href={href} key={href} aria-current={isNavSelected(pathname, href) ? "page" : undefined}>
             {label}
           </a>
         ))}
       </nav>
       <div className="header-actions">
-        <div className="lang-toggle" aria-label="언어 선택">
-          <span>KOR</span>
-          <span>ENG</span>
-        </div>
         {user ? (
           <>
+            <RoleModeSwitcher compact />
             <a href="/account">{user.name}</a>
             <button onClick={() => void logout()}>로그아웃</button>
             <Bell size={18} aria-hidden />
@@ -219,9 +296,10 @@ export function Sidebar({ admin = false }: { admin?: boolean }) {
   ];
   const tutorItems: Array<[string, IconType, string]> = [
     ["홈", Home, "/tutor/dashboard"],
+    ["내 수업", Video, "/bookings"],
     ["일정 관리", CalendarDays, "/tutor/schedule"],
     ["레슨 프로필", Users, "/tutor/profile"],
-    ["완료 수업", CheckCircle2, "/tutor/dashboard"],
+    ["채팅", MessageCircle, "/chat"],
     ["수익 관리", Wallet, "/tutor/dashboard"],
     ["설정", Settings, "/account"]
   ];
@@ -234,7 +312,7 @@ export function Sidebar({ admin = false }: { admin?: boolean }) {
       </a>
       <div className="side-links">
         {items.map(([label, Icon, href], index) => {
-          const selected = pathname === href && (href !== (admin ? "/admin" : "/tutor/dashboard") || index === 0);
+          const selected = isNavSelected(pathname, href) && (href !== (admin ? "/admin" : "/tutor/dashboard") || index === 0 || pathname === href);
           return (
             <a className={selected ? "selected" : ""} href={href} key={`${label}-${index}`}>
               <Icon size={17} />
@@ -243,11 +321,7 @@ export function Sidebar({ admin = false }: { admin?: boolean }) {
           );
         })}
       </div>
-      {!admin ? (
-        <a className="role-switch" href="/">
-          학생 화면으로 이동
-        </a>
-      ) : null}
+      {!admin ? <RoleModeSwitcher /> : null}
       <a className="logout" href="/account">
         계정 설정
       </a>

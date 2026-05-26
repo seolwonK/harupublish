@@ -92,6 +92,13 @@ class BookingIntegrationTest {
                 .andExpect(jsonPath("$.data.bookings.length()").value(1))
                 .andExpect(jsonPath("$.data.bookings[0].id").value(bookingId));
 
+        mockMvc.perform(get("/api/tutors/%d/schedule".formatted(tutorProfileId))
+                        .param("from", "2031-05-20T00:00:00Z")
+                        .param("to", "2031-05-20T03:00:00Z"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.slots[0].id").value(scheduleSlotId))
+                .andExpect(jsonPath("$.data.slots[0].booked").value(true));
+
         mockMvc.perform(patch("/api/users/me/active-role")
                         .header("Authorization", auth(tutorToken))
                         .contentType(MediaType.APPLICATION_JSON)
@@ -108,7 +115,8 @@ class BookingIntegrationTest {
                         .header("Authorization", auth(tutorToken)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.bookings.length()").value(1))
-                .andExpect(jsonPath("$.data.bookings[0].id").value(bookingId));
+                .andExpect(jsonPath("$.data.bookings[0].id").value(bookingId))
+                .andExpect(jsonPath("$.data.bookings[0].studentName").value("Test User"));
 
         mockMvc.perform(get("/api/bookings/%d/join".formatted(bookingId))
                         .header("Authorization", auth(studentToken)))
@@ -257,8 +265,8 @@ class BookingIntegrationTest {
                                   "introVideoUrl": "https://youtu.be/haru-intro",
                                   "thumbnailUrl": "https://example.com/thumb.jpg",
                                   "availableLanguages": ["Korean", "English"],
-                                  "lessonPrice25Amount": 25000,
-                                  "lessonPrice50Amount": 45000,
+                                                                                                                                        "lessonPrice25Amount": 25.00,
+                                                                                                                                        "lessonPrice50Amount": 45.00,
                                   "availableTimeNote": "Weekday evenings KST",
                                   "paymentMethod": "BANK_TRANSFER"
                                 }

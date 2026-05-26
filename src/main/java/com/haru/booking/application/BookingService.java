@@ -25,6 +25,7 @@ import com.haru.tutor.infra.TutorProfileRepository;
 import com.haru.user.domain.Role;
 import com.haru.user.domain.UserAccount;
 import com.haru.user.infra.UserAccountRepository;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -41,6 +42,7 @@ public class BookingService {
     private final PaymentRepository paymentRepository;
     private final JitsiRoomNameGenerator jitsiRoomNameGenerator;
     private final JitsiTokenService jitsiTokenService;
+    private static final String ALREADY_BOOKED_MESSAGE = "Schedule slot is already booked.";
 
     public BookingService(
             UserAccountRepository userAccountRepository,
@@ -67,9 +69,9 @@ public class BookingService {
         }
         UserAccount student = userAccountRepository.findWithRolesById(studentUserId)
                 .orElseThrow(() -> new NotFoundException("User was not found."));
-        TutorProfile tutorProfile = tutorProfileRepository.findByIdAndStatus(request.tutorProfileId(), TutorProfileStatus.APPROVED)
+        TutorProfile tutorProfile = tutorProfileRepository.findByIdAndStatusAndHiddenFalse(request.tutorProfileId(), TutorProfileStatus.APPROVED)
                 .orElseThrow(() -> new NotFoundException("Tutor profile was not found."));
-        TutorScheduleSlot slot = tutorScheduleSlotRepository.findById(request.scheduleSlotId())
+        TutorScheduleSlot slot = tutorScheduleSlotRepository.findByIdForUpdate(request.scheduleSlotId())
                 .orElseThrow(() -> new NotFoundException("Schedule slot was not found."));
 
         if (!slot.getTutorProfile().getId().equals(tutorProfile.getId())) {
@@ -79,11 +81,16 @@ public class BookingService {
             throw new BusinessException(ErrorCode.INVALID_REQUEST, "Tutors cannot book their own lessons.");
         }
         if (bookingRepository.existsByScheduleSlotIdAndStatus(slot.getId(), BookingStatus.RESERVED)) {
-            throw new BusinessException(ErrorCode.INVALID_REQUEST, "Schedule slot is already booked.");
+            throw alreadyBooked();
         }
         ensureRemainingLessonCredit(student.getId(), tutorProfile.getId(), request.lessonDurationMinutes());
 
-        Booking booking = bookingRepository.save(Booking.reserve(student, tutorProfile, slot, request.lessonDurationMinutes()));
+        Booking booking;
+        try {
+            booking = bookingRepository.saveAndFlush(Booking.reserve(student, tutorProfile, slot, request.lessonDurationMinutes()));
+        } catch (DataIntegrityViolationException exception) {
+            throw alreadyBooked();
+        }
         booking.assignJitsiRoom(
                 JitsiTokenService.PROVIDER,
                 jitsiRoomNameGenerator.createRoomName(booking.getId()),
@@ -143,6 +150,10 @@ public class BookingService {
     private boolean canAccess(Long userId, Booking booking) {
         return booking.getStudent().getId().equals(userId)
                 || booking.getTutorProfile().getUser().getId().equals(userId);
+    }
+
+    private BusinessException alreadyBooked() {
+        return new BusinessException(ErrorCode.INVALID_REQUEST, ALREADY_BOOKED_MESSAGE);
     }
 
     private void ensureRemainingLessonCredit(Long studentUserId, Long tutorProfileId, int lessonDurationMinutes) {

@@ -153,8 +153,8 @@ class TutorScheduleIntegrationTest {
                                   "introVideoUrl": "https://youtu.be/haru-intro",
                                   "thumbnailUrl": "https://example.com/thumb.jpg",
                                   "availableLanguages": ["Korean", "English"],
-                                  "lessonPrice25Amount": 25000,
-                                  "lessonPrice50Amount": 45000,
+                                                                                                                                        "lessonPrice25Amount": 25.00,
+                                                                                                                                        "lessonPrice50Amount": 45.00,
                                   "availableTimeNote": "Weekday evenings KST",
                                   "paymentMethod": "BANK_TRANSFER"
                                 }

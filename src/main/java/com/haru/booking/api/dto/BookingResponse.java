@@ -8,6 +8,7 @@ import java.time.Instant;
 public record BookingResponse(
         Long id,
         Long studentUserId,
+    String studentName,
         Long tutorProfileId,
     String tutorDisplayName,
     String tutorShortIntroduction,
@@ -25,6 +26,7 @@ public record BookingResponse(
         return new BookingResponse(
                 booking.getId(),
                 booking.getStudent().getId(),
+            booking.getStudent().getName(),
                 booking.getTutorProfile().getId(),
             booking.getTutorProfile().getDisplayName(),
             booking.getTutorProfile().getShortIntroduction(),

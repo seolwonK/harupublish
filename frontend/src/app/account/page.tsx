@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { haruApi, Role } from "../api";
 import { useAuth } from "../auth";
-import { ApiNotice, AppHeader, EmptyState, Field, TimeZoneSelect, statusLabel } from "../components";
+import { ApiNotice, AppHeader, EmptyState, Field, RoleModeSwitcher, TimeZoneSelect, statusLabel } from "../components";
 
 export default function AccountPage() {
   const { user, accessToken, refreshMe } = useAuth();
@@ -87,6 +87,7 @@ export default function AccountPage() {
             <p><strong>튜터 프로필</strong><span>{statusLabel(user.tutorProfileStatus)}</span></p>
           </div>
           <div className="button-row">
+            <RoleModeSwitcher />
             {user.roles.map((role) => (
               <button className="ghost-button" key={role} onClick={() => void changeRole(role)}>
                 {role}

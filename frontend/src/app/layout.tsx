@@ -27,7 +27,12 @@ const gmarketSans = localFont({
 
 export const metadata: Metadata = {
   title: "Haru",
-  description: "Haru frontend"
+  description: "Haru frontend",
+  icons: {
+    icon: "/images/haru-logo-cropped.png",
+    shortcut: "/images/haru-logo-cropped.png",
+    apple: "/images/haru-logo-cropped.png"
+  }
 };
 
 export default function RootLayout({
