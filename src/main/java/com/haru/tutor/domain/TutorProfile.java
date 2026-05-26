@@ -71,6 +71,9 @@ public class TutorProfile {
     @Column(name = "payment_method", length = 100)
     private String paymentMethod;
 
+    @Column(name = "hidden", nullable = false)
+    private boolean hidden;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
     private TutorProfileStatus status;
@@ -95,6 +98,7 @@ public class TutorProfile {
 
     private TutorProfile(UserAccount user) {
         this.user = user;
+        this.hidden = false;
         this.status = TutorProfileStatus.DRAFT;
         this.createdAt = Instant.now();
         this.updatedAt = this.createdAt;
@@ -166,6 +170,22 @@ public class TutorProfile {
         status = TutorProfileStatus.REJECTED;
         rejectedAt = Instant.now();
         approvedAt = null;
+        touch();
+    }
+
+    public void hide() {
+        if (hidden) {
+            return;
+        }
+        hidden = true;
+        touch();
+    }
+
+    public void show() {
+        if (!hidden) {
+            return;
+        }
+        hidden = false;
         touch();
     }
 
@@ -272,6 +292,10 @@ public class TutorProfile {
 
     public String getPaymentMethod() {
         return paymentMethod;
+    }
+
+    public boolean isHidden() {
+        return hidden;
     }
 
     public TutorProfileStatus getStatus() {

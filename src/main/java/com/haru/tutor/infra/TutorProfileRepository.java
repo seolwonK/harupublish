@@ -19,11 +19,11 @@ public interface TutorProfileRepository extends JpaRepository<TutorProfile, Long
     Optional<TutorProfileStatus> findStatusByUserId(@Param("userId") Long userId);
 
     @EntityGraph(attributePaths = {"user", "user.roles"})
-    List<TutorProfile> findAllByStatusOrderByApprovedAtDesc(TutorProfileStatus status);
+    List<TutorProfile> findAllByStatusAndHiddenFalseOrderByApprovedAtDesc(TutorProfileStatus status);
 
     @EntityGraph(attributePaths = {"user", "user.roles"})
     List<TutorProfile> findAllByStatusOrderBySubmittedAtAsc(TutorProfileStatus status);
 
     @EntityGraph(attributePaths = {"user", "user.roles"})
-    Optional<TutorProfile> findByIdAndStatus(Long id, TutorProfileStatus status);
+    Optional<TutorProfile> findByIdAndStatusAndHiddenFalse(Long id, TutorProfileStatus status);
 }

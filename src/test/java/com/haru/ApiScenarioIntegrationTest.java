@@ -291,7 +291,7 @@ class ApiScenarioIntegrationTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.error.code").value("INVALID_REQUEST"));
 
-        saveCompleteTutorProfile(tutorTokens.accessToken(), "Scenario Korean Expert", 25000, 45000);
+        saveCompleteTutorProfile(tutorTokens.accessToken(), "Scenario Korean Expert", 25, 45);
 
         mockMvc.perform(post("/api/tutors/me/profile/submit")
                         .header("Authorization", auth(tutorTokens.accessToken())))
@@ -314,7 +314,7 @@ class ApiScenarioIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.tutorProfileStatus").value("REJECTED"));
 
-        saveCompleteTutorProfile(tutorTokens.accessToken(), "Scenario Korean Expert", 25000, 45000);
+        saveCompleteTutorProfile(tutorTokens.accessToken(), "Scenario Korean Expert", 25, 45);
 
         mockMvc.perform(get("/api/users/me")
                         .header("Authorization", auth(tutorTokens.accessToken())))
@@ -338,8 +338,8 @@ class ApiScenarioIntegrationTest {
                 .andExpect(jsonPath("$.data.id").value(tutorProfileId))
                 .andExpect(jsonPath("$.data.category").value("KOREAN"))
                 .andExpect(jsonPath("$.data.availableLanguages[0]").value("Korean"))
-                .andExpect(jsonPath("$.data.lessonPrice25Amount").value(25000))
-                .andExpect(jsonPath("$.data.lessonPrice50Amount").value(45000));
+                .andExpect(jsonPath("$.data.lessonPrice25Amount").value(25.00))
+                .andExpect(jsonPath("$.data.lessonPrice50Amount").value(45.00));
 
         saveCompleteTutorProfile(tutorTokens.accessToken(), "Edited Korean Expert", 30000, 55000);
 
@@ -385,27 +385,27 @@ class ApiScenarioIntegrationTest {
         mockMvc.perform(put("/api/tutors/me/profile")
                         .header("Authorization", auth(tutorTokens.accessToken()))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(completeTutorProfileJson("https://example.com/intro.mp4", 25000, 45000, "[\"Korean\", \"English\"]")))
+                        .content(completeTutorProfileJson("https://example.com/intro.mp4", 25, 45, "[\"Korean\", \"English\"]")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.introVideoUrl").value("https://example.com/intro.mp4"));
 
         mockMvc.perform(put("/api/tutors/me/profile")
                         .header("Authorization", auth(tutorTokens.accessToken()))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(completeTutorProfileJson("https://youtu.be/haru-intro", 25000, 45000, "[\"Korean\", \"English\"]").replace("\"category\": \"KOREAN\"", "\"category\": \"INVALID\"")))
+                        .content(completeTutorProfileJson("https://youtu.be/haru-intro", 25, 45, "[\"Korean\", \"English\"]").replace("\"category\": \"KOREAN\"", "\"category\": \"INVALID\"")))
                 .andExpect(status().isBadRequest());
 
         mockMvc.perform(put("/api/tutors/me/profile")
                         .header("Authorization", auth(tutorTokens.accessToken()))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(completeTutorProfileJson("https://youtu.be/haru-intro", 0, 45000, "[\"Korean\", \"English\"]")))
+                        .content(completeTutorProfileJson("https://youtu.be/haru-intro", 0, 45, "[\"Korean\", \"English\"]")))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.error.code").value("INVALID_REQUEST"));
 
         mockMvc.perform(put("/api/tutors/me/profile")
                         .header("Authorization", auth(tutorTokens.accessToken()))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(completeTutorProfileJson("https://youtu.be/haru-intro", 25000, 45000, "[]")))
+                        .content(completeTutorProfileJson("https://youtu.be/haru-intro", 25, 45, "[]")))
                 .andExpect(status().isOk());
 
         mockMvc.perform(post("/api/tutors/me/profile/submit")

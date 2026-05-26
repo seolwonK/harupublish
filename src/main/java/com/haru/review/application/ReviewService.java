@@ -57,7 +57,7 @@ public class ReviewService {
 
     @Transactional(readOnly = true)
     public ReviewListResponse getPublicTutorReviews(Long tutorProfileId) {
-        tutorProfileRepository.findByIdAndStatus(tutorProfileId, TutorProfileStatus.APPROVED)
+        tutorProfileRepository.findByIdAndStatusAndHiddenFalse(tutorProfileId, TutorProfileStatus.APPROVED)
                 .orElseThrow(() -> new NotFoundException("Tutor profile was not found."));
         List<Review> reviews = reviewRepository.findAllByTutorProfileIdAndVisibleTrueOrderByCreatedAtDesc(tutorProfileId);
         return ReviewListResponse.from(tutorProfileId, reviews);

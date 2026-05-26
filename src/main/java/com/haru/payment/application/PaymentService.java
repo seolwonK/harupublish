@@ -72,7 +72,7 @@ public class PaymentService {
 
         UserAccount student = userAccountRepository.findWithRolesById(studentUserId)
                 .orElseThrow(() -> new NotFoundException("User was not found."));
-        TutorProfile tutorProfile = tutorProfileRepository.findByIdAndStatus(request.tutorProfileId(), TutorProfileStatus.APPROVED)
+        TutorProfile tutorProfile = tutorProfileRepository.findByIdAndStatusAndHiddenFalse(request.tutorProfileId(), TutorProfileStatus.APPROVED)
                 .orElseThrow(() -> new NotFoundException("Tutor profile was not found."));
 
         if (tutorProfile.getUser().getId().equals(studentUserId)) {

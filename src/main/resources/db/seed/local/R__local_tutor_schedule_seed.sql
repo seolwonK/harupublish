@@ -96,6 +96,7 @@ INSERT INTO tutor_profiles (
     lesson_price_50_amount,
     available_time_note,
     payment_method,
+    hidden,
     status,
     submitted_at,
     approved_at,
@@ -113,10 +114,11 @@ SELECT
     'https://www.youtube.com/watch?v=jNQXAC9IVRw',
     '',
     'Korean,English',
-    18000.00,
-    34000.00,
+    18.00,
+    34.00,
     'Weekday evenings and Saturday morning KST.',
     'BANK_TRANSFER',
+    FALSE,
     'APPROVED',
     CURRENT_TIMESTAMP(6),
     CURRENT_TIMESTAMP(6),
@@ -138,6 +140,7 @@ ON DUPLICATE KEY UPDATE
     lesson_price_50_amount = VALUES(lesson_price_50_amount),
     available_time_note = VALUES(available_time_note),
     payment_method = VALUES(payment_method),
+    hidden = VALUES(hidden),
     status = VALUES(status),
     approved_at = CURRENT_TIMESTAMP(6),
     updated_at = CURRENT_TIMESTAMP(6);
@@ -157,6 +160,7 @@ INSERT INTO tutor_profiles (
     lesson_price_50_amount,
     available_time_note,
     payment_method,
+    hidden,
     status,
     submitted_at,
     approved_at,
@@ -174,10 +178,11 @@ SELECT
     NULL,
     '',
     'Korean,English,Japanese',
-    22000.00,
-    42000.00,
+    22.00,
+    42.00,
     'Afternoons and late evenings KST.',
     'BANK_TRANSFER',
+    FALSE,
     'APPROVED',
     CURRENT_TIMESTAMP(6),
     CURRENT_TIMESTAMP(6),
@@ -198,6 +203,7 @@ ON DUPLICATE KEY UPDATE
     lesson_price_50_amount = VALUES(lesson_price_50_amount),
     available_time_note = VALUES(available_time_note),
     payment_method = VALUES(payment_method),
+    hidden = VALUES(hidden),
     status = VALUES(status),
     approved_at = CURRENT_TIMESTAMP(6),
     updated_at = CURRENT_TIMESTAMP(6);
@@ -217,6 +223,7 @@ INSERT INTO tutor_profiles (
     lesson_price_50_amount,
     available_time_note,
     payment_method,
+    hidden,
     status,
     submitted_at,
     approved_at,
@@ -234,10 +241,11 @@ SELECT
     NULL,
     '',
     'Korean,English,Chinese',
-    20000.00,
-    38000.00,
+    20.00,
+    38.00,
     'Morning and lunch slots KST.',
     'BANK_TRANSFER',
+    FALSE,
     'APPROVED',
     CURRENT_TIMESTAMP(6),
     CURRENT_TIMESTAMP(6),
@@ -258,6 +266,7 @@ ON DUPLICATE KEY UPDATE
     lesson_price_50_amount = VALUES(lesson_price_50_amount),
     available_time_note = VALUES(available_time_note),
     payment_method = VALUES(payment_method),
+    hidden = VALUES(hidden),
     status = VALUES(status),
     approved_at = CURRENT_TIMESTAMP(6),
     updated_at = CURRENT_TIMESTAMP(6);
@@ -277,6 +286,7 @@ INSERT INTO tutor_profiles (
     lesson_price_50_amount,
     available_time_note,
     payment_method,
+    hidden,
     status,
     submitted_at,
     approved_at,
@@ -294,10 +304,11 @@ SELECT
     NULL,
     '',
     'Korean,English',
-    17000.00,
-    32000.00,
+    17.00,
+    32.00,
     'Flexible weekend schedule KST.',
     'BANK_TRANSFER',
+    FALSE,
     'APPROVED',
     CURRENT_TIMESTAMP(6),
     CURRENT_TIMESTAMP(6),
@@ -318,9 +329,30 @@ ON DUPLICATE KEY UPDATE
     lesson_price_50_amount = VALUES(lesson_price_50_amount),
     available_time_note = VALUES(available_time_note),
     payment_method = VALUES(payment_method),
+    hidden = VALUES(hidden),
     status = VALUES(status),
     approved_at = CURRENT_TIMESTAMP(6),
     updated_at = CURRENT_TIMESTAMP(6);
+
+-- Hide ad-hoc local test tutors so curated seed profiles remain the default public list.
+UPDATE tutor_profiles tp
+JOIN users u ON u.id = tp.user_id
+SET tp.hidden = TRUE,
+    tp.updated_at = CURRENT_TIMESTAMP(6)
+WHERE tp.status = 'APPROVED'
+  AND u.email NOT IN (
+      'tutor.korean@haru.local',
+      'tutor.kpop@haru.local',
+      'tutor.beauty@haru.local',
+      'tutor.travel@haru.local'
+  )
+  AND (
+      LOWER(COALESCE(tp.display_name, '')) LIKE '%test%'
+      OR LOWER(COALESCE(tp.display_name, '')) LIKE 'jitsi %'
+      OR LOWER(COALESCE(u.email, '')) LIKE '%test%'
+      OR LOWER(COALESCE(u.email, '')) LIKE '%alpha%'
+      OR LOWER(COALESCE(u.email, '')) LIKE '%beta%'
+  );
 
 INSERT IGNORE INTO tutor_schedule_slots (
     tutor_profile_id,

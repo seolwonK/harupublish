@@ -89,7 +89,7 @@ public class TutorService {
 
     @Transactional(readOnly = true)
     public List<ExpertListResponse> getApprovedExperts() {
-        return tutorProfileRepository.findAllByStatusOrderByApprovedAtDesc(TutorProfileStatus.APPROVED)
+        return tutorProfileRepository.findAllByStatusAndHiddenFalseOrderByApprovedAtDesc(TutorProfileStatus.APPROVED)
                 .stream()
                 .map(profile -> ExpertListResponse.from(
                         profile,
@@ -109,7 +109,7 @@ public class TutorService {
 
     @Transactional(readOnly = true)
     public TutorProfileResponse getApprovedProfile(Long tutorProfileId) {
-        TutorProfile profile = tutorProfileRepository.findByIdAndStatus(tutorProfileId, TutorProfileStatus.APPROVED)
+        TutorProfile profile = tutorProfileRepository.findByIdAndStatusAndHiddenFalse(tutorProfileId, TutorProfileStatus.APPROVED)
                 .orElseThrow(() -> new NotFoundException("Tutor profile was not found."));
         return TutorProfileResponse.from(profile);
     }

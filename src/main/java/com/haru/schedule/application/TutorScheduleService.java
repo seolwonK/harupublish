@@ -63,7 +63,7 @@ public class TutorScheduleService {
 
     @Transactional(readOnly = true)
     public TutorScheduleResponse getPublicSchedule(Long tutorProfileId, Instant from, Instant to) {
-        TutorProfile profile = tutorProfileRepository.findByIdAndStatus(tutorProfileId, TutorProfileStatus.APPROVED)
+        TutorProfile profile = tutorProfileRepository.findByIdAndStatusAndHiddenFalse(tutorProfileId, TutorProfileStatus.APPROVED)
                 .orElseThrow(() -> new NotFoundException("Tutor profile was not found."));
         return buildScheduleResponse(profile.getId(), from, to);
     }

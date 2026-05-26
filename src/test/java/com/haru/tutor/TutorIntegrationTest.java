@@ -2,6 +2,8 @@ package com.haru.tutor;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.haru.tutor.domain.TutorProfile;
+import com.haru.tutor.infra.TutorProfileRepository;
 import com.haru.user.domain.Role;
 import com.haru.user.domain.UserAccount;
 import com.haru.user.infra.UserAccountRepository;
@@ -34,6 +36,9 @@ class TutorIntegrationTest {
 
     @Autowired
     UserAccountRepository userAccountRepository;
+
+        @Autowired
+        TutorProfileRepository tutorProfileRepository;
 
     @Test
     void tutorProfileRequiresApprovalBeforeExpertsExposure() throws Exception {
@@ -82,8 +87,8 @@ class TutorIntegrationTest {
                                   "introVideoUrl": "https://youtu.be/haru-intro",
                                   "thumbnailUrl": "https://example.com/thumb.jpg",
                                   "availableLanguages": ["Korean", "English"],
-                                  "lessonPrice25Amount": 25000,
-                                  "lessonPrice50Amount": 45000,
+                                                                                                                                        "lessonPrice25Amount": 25.00,
+                                                                                                                                        "lessonPrice50Amount": 45.00,
                                   "availableTimeNote": "Weekday evenings KST",
                                   "paymentMethod": "BANK_TRANSFER"
                                 }
@@ -149,8 +154,23 @@ class TutorIntegrationTest {
                 .andExpect(jsonPath("$.data.id").value(tutorProfileId))
                 .andExpect(jsonPath("$.data.category").value("KOREAN"))
                 .andExpect(jsonPath("$.data.availableLanguages[0]").value("Korean"))
-                .andExpect(jsonPath("$.data.lessonPrice25Amount").value(25000))
-                .andExpect(jsonPath("$.data.lessonPrice50Amount").value(45000));
+                .andExpect(jsonPath("$.data.lessonPrice25Amount").value(25.00))
+                .andExpect(jsonPath("$.data.lessonPrice50Amount").value(45.00));
+
+        TutorProfile hiddenProfile = tutorProfileRepository.findById(tutorProfileId)
+                .orElseThrow();
+        hiddenProfile.hide();
+        tutorProfileRepository.save(hiddenProfile);
+
+        String hiddenExpertsResponse = mockMvc.perform(get("/api/tutors"))
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+        assertThat(containsTutorProfile(hiddenExpertsResponse, tutorProfileId)).isFalse();
+
+        mockMvc.perform(get("/api/tutors/%d".formatted(tutorProfileId)))
+                .andExpect(status().isNotFound());
     }
 
     private boolean containsTutorProfile(String response, long tutorProfileId) throws Exception {
