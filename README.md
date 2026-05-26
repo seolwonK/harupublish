@@ -387,6 +387,64 @@ JITSI_JAAS_TOKEN_TTL_MINUTES=120
 
 민감한 Jitsi JWT, private key, 토큰 파일은 저장소에 커밋하지 않습니다.
 
+## Render 배포
+
+이 프로젝트 백엔드는 루트 `Dockerfile` 기준으로 `Render` Web Service에 배포할 수 있습니다.
+
+### 1. Render 서비스 생성
+
+권장 설정:
+
+| 항목 | 값 |
+| --- | --- |
+| Service type | `Web Service` |
+| Runtime | `Docker` |
+| Root Directory | `/` |
+| Dockerfile Path | `./Dockerfile` |
+| Health Check Path | `/swagger-ui.html` |
+
+루트의 `render.yaml`을 사용하면 기본 서비스 설정을 자동으로 불러올 수 있습니다.
+
+### 2. Render 환경변수
+
+필수 환경변수:
+
+```env
+SPRING_DATASOURCE_URL=jdbc:mysql://<host>:3306/<database>?useSSL=true&serverTimezone=UTC&useUnicode=true&characterEncoding=UTF-8&connectionCollation=utf8mb4_unicode_ci
+SPRING_DATASOURCE_USERNAME=<db-user>
+SPRING_DATASOURCE_PASSWORD=<db-password>
+HARU_JWT_SECRET=<32-byte-plus-random-secret>
+HARU_CORS_ALLOWED_ORIGIN_PATTERNS=https://<frontend-domain>,https://*.vercel.app
+```
+
+선택 환경변수:
+
+```env
+LEMON_SQUEEZY_ENABLED=true
+LEMON_SQUEEZY_API_KEY=...
+LEMON_SQUEEZY_STORE_ID=...
+LEMON_SQUEEZY_VARIANT_ID=...
+LEMON_SQUEEZY_SIGNING_SECRET=...
+LEMON_SQUEEZY_REDIRECT_URL=https://<frontend-domain>/payments
+LEMON_SQUEEZY_TEST_MODE=true
+LEMON_SQUEEZY_CUSTOM_PRICE_EXCHANGE_RATE=1400
+
+JITSI_JAAS_ENABLED=true
+JITSI_JAAS_APP_ID=...
+JITSI_JAAS_KEY_ID=...
+JITSI_JAAS_PRIVATE_KEY_PEM=...
+JITSI_JAAS_DOMAIN=8x8.vc
+JITSI_JAAS_TOKEN_TTL_MINUTES=120
+```
+
+`Render`는 `PORT`를 자동 주입하므로 별도 설정할 필요가 없습니다.
+
+### 3. 데이터베이스 주의사항
+
+이 백엔드는 현재 MySQL 기준으로 migration과 운영 로직이 구성되어 있습니다. 따라서 `Render`에 백엔드만 올릴 경우에도 MySQL 호환 외부 DB를 함께 준비해야 합니다.
+
+또한 업로드 파일은 로컬 디스크 `/app/uploads`를 사용하므로, 인스턴스 재배포 시 파일이 유지되어야 한다면 외부 스토리지 또는 영구 디스크 전략을 추가로 고려해야 합니다.
+
 ## 데이터베이스
 
 Flyway가 DB 스키마를 관리합니다.

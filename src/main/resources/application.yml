@@ -9,6 +9,11 @@ spring:
     url: jdbc:mysql://localhost:3306/haru?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC&useUnicode=true&characterEncoding=UTF-8&connectionCollation=utf8mb4_unicode_ci
     username: haru
     password: haru
+    hikari:
+      maximum-pool-size: ${DB_POOL_MAX_SIZE:10}
+      minimum-idle: ${DB_POOL_MIN_IDLE:2}
+      connection-timeout: ${DB_CONNECTION_TIMEOUT_MS:30000}
+      max-lifetime: ${DB_CONNECTION_MAX_LIFETIME_MS:1800000}
   jpa:
     hibernate:
       ddl-auto: validate
@@ -22,25 +27,35 @@ spring:
     locations: classpath:db/migration,classpath:db/migration/{vendor}
 
 server:
-  port: 8080
+  port: ${PORT:8080}
+  compression:
+    enabled: true
+    mime-types: application/json,application/xml,text/html,text/xml,text/plain,text/css,application/javascript
+    min-response-size: 1024
+  tomcat:
+    threads:
+      max: ${SERVER_TOMCAT_MAX_THREADS:80}
+      min-spare: ${SERVER_TOMCAT_MIN_SPARE_THREADS:10}
 
 logging:
   level:
     root: INFO
-    com.haru: DEBUG
+    com.haru: ${LOGGING_LEVEL_COM_HARU:INFO}
     org.springframework.web: INFO
     org.springframework.security: INFO
 
     # SQL 쿼리 출력
-    org.hibernate.SQL: DEBUG
+    org.hibernate.SQL: ${LOGGING_LEVEL_HIBERNATE_SQL:WARN}
 
     # SQL 파라미터 출력, Spring Boot 3 / Hibernate 6 기준
-    org.hibernate.orm.jdbc.bind: TRACE
+    org.hibernate.orm.jdbc.bind: ${LOGGING_LEVEL_HIBERNATE_BIND:OFF}
 
   pattern:
     console: "%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%thread] %logger{36} - %msg%n"
 
 haru:
+  cors:
+    allowed-origin-patterns: ${HARU_CORS_ALLOWED_ORIGIN_PATTERNS:http://localhost:3000,http://127.0.0.1:3000,http://localhost:3001,http://127.0.0.1:3001,http://localhost:3002,http://127.0.0.1:3002}
   jwt:
     secret: "change-this-local-development-secret-key-minimum-32-bytes"
     access-token-expiration-minutes: 30

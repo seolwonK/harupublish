@@ -96,6 +96,10 @@ export default function TutorsPage() {
             <img
               src={tutorImage(tutor)}
               alt={`${tutor.displayName ?? "Haru 튜터"} 프로필`}
+              width={220}
+              height={220}
+              loading="lazy"
+              decoding="async"
               onError={(event) => {
                 if (event.currentTarget.src !== new URL(DEFAULT_TUTOR_IMAGE, window.location.origin).toString()) {
                   event.currentTarget.src = DEFAULT_TUTOR_IMAGE;

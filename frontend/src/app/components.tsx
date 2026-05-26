@@ -20,6 +20,7 @@ import {
   Video,
   Wallet
 } from "lucide-react";
+import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -52,7 +53,11 @@ export function Button({
 } & React.ButtonHTMLAttributes<HTMLButtonElement>) {
   const classes = cn("ui-button", `ui-button-${variant}`, className);
   if (as === "a") {
-    return (
+    return href?.startsWith("/") ? (
+      <Link className={classes} href={href}>
+        {children}
+      </Link>
+    ) : (
       <a className={classes} href={href}>
         {children}
       </a>
@@ -107,7 +112,7 @@ export function SectionHeader({
 function BrandLogo({ admin = false }: { admin?: boolean }) {
   return (
     <span className="brand-logo">
-      <img src="/images/haru-logo-cropped.png" alt="Haru" />
+      <img src="/images/haru-logo-cropped.png" alt="Haru" width={90} height={36} decoding="async" />
       {admin ? <span>Admin</span> : null}
     </span>
   );
@@ -129,7 +134,7 @@ export function Avatar({
 
   return (
     <div className={cn("avatar", large && "avatar-large", className)}>
-      {src ? <img src={src} alt="" onError={() => setBroken(true)} /> : <span>{label}</span>}
+      {src ? <img src={src} alt="" width={48} height={48} loading="lazy" decoding="async" onError={() => setBroken(true)} /> : <span>{label}</span>}
     </div>
   );
 }
@@ -142,6 +147,10 @@ export function TutorPortrait({ imageUrl, label, large = false }: { imageUrl?: s
       className={large ? "tutor-image tutor-image-large" : "tutor-image"}
       src={src}
       alt={label ? `${label} 프로필 이미지` : ""}
+      width={large ? 520 : 320}
+      height={large ? 520 : 320}
+      loading={large ? "eager" : "lazy"}
+      decoding="async"
       onError={() => {
         if (src !== DEFAULT_TUTOR_IMAGE) setSrc(DEFAULT_TUTOR_IMAGE);
       }}

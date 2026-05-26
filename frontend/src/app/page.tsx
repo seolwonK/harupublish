@@ -113,6 +113,10 @@ function TutorImage({ src, className = "" }: { src?: string | null; className?: 
       className={className}
       src={imageSrc}
       alt=""
+      width={320}
+      height={320}
+      loading="lazy"
+      decoding="async"
       onError={() => {
         if (imageSrc !== DEFAULT_TUTOR_IMAGE) setImageSrc(DEFAULT_TUTOR_IMAGE);
       }}

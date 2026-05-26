@@ -2,7 +2,7 @@
 
 import { CalendarDays, CheckCircle2, Globe2, MapPin, MessageCircle, Play, ShieldCheck, Video } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { use, useEffect, useMemo, useState } from "react";
+import { Suspense, use, useEffect, useMemo, useState } from "react";
 import { dateRangeFromToday, HaruApiError, haruApi, ReviewListResponse, ScheduleSlotResponse, toMoney, TutorProfileResponse, youtubeEmbedUrl } from "../../api";
 import { useAuth } from "../../auth";
 import { clearPendingBookingIntent, writePendingBookingIntent } from "../../booking-intent";
@@ -17,7 +17,7 @@ function formatTime(value: string) {
   return new Date(value).toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" });
 }
 
-export default function TutorProfilePage({ params }: { params: Promise<{ id: string }> }) {
+function TutorProfilePageContent({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const numericId = Number(id);
   const router = useRouter();
@@ -353,5 +353,13 @@ export default function TutorProfilePage({ params }: { params: Promise<{ id: str
         </aside>
       </section>
     </main>
+  );
+}
+
+export default function TutorProfilePage({ params }: { params: Promise<{ id: string }> }) {
+  return (
+    <Suspense fallback={null}>
+      <TutorProfilePageContent params={params} />
+    </Suspense>
   );
 }

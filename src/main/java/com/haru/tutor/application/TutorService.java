@@ -2,6 +2,7 @@ package com.haru.tutor.application;
 
 import com.haru.common.exception.NotFoundException;
 import com.haru.review.infra.ReviewRepository;
+import com.haru.review.infra.ReviewRepository.TutorReviewStats;
 import com.haru.tutor.api.dto.ExpertListResponse;
 import com.haru.tutor.api.dto.TutorProfileRequest;
 import com.haru.tutor.api.dto.TutorProfileResponse;
@@ -15,6 +16,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Map;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 @Service
 public class TutorService {
@@ -89,13 +93,24 @@ public class TutorService {
 
     @Transactional(readOnly = true)
     public List<ExpertListResponse> getApprovedExperts() {
-        return tutorProfileRepository.findAllByStatusAndHiddenFalseOrderByApprovedAtDesc(TutorProfileStatus.APPROVED)
+        List<TutorProfile> profiles = tutorProfileRepository.findAllByStatusAndHiddenFalseOrderByApprovedAtDesc(TutorProfileStatus.APPROVED);
+        List<Long> profileIds = profiles.stream().map(TutorProfile::getId).toList();
+        Map<Long, TutorReviewStats> reviewStatsByProfileId = profileIds.isEmpty()
+                ? Map.of()
+                : reviewRepository.findStatsByTutorProfileIds(profileIds)
                 .stream()
-                .map(profile -> ExpertListResponse.from(
-                        profile,
-                        roundedAverageRating(profile.getId()),
-                        reviewRepository.countByTutorProfileIdAndVisibleTrue(profile.getId())
-                ))
+                .collect(Collectors.toMap(TutorReviewStats::getTutorProfileId, Function.identity()));
+
+        return profiles
+                .stream()
+                .map(profile -> {
+                    TutorReviewStats stats = reviewStatsByProfileId.get(profile.getId());
+                    return ExpertListResponse.from(
+                            profile,
+                            roundedAverageRating(stats == null ? null : stats.getAverageRating()),
+                            stats == null ? 0 : Math.toIntExact(stats.getReviewCount())
+                    );
+                })
                 .toList();
     }
 
@@ -124,8 +139,7 @@ public class TutorService {
                 .orElseThrow(() -> new NotFoundException("Tutor profile was not found."));
     }
 
-    private Double roundedAverageRating(Long tutorProfileId) {
-        Double average = reviewRepository.averageRatingByTutorProfileId(tutorProfileId);
+    private Double roundedAverageRating(Double average) {
         if (average == null) {
             return 0.0;
         }

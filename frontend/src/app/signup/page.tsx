@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "../auth";
 import { ApiNotice, AppHeader, Field, TimeZoneSelect } from "../components";
@@ -10,7 +10,7 @@ function safeRedirectTarget(value: string | null, fallback = "/account") {
   return value;
 }
 
-export default function SignupPage() {
+function SignupPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { signup } = useAuth();
@@ -64,5 +64,13 @@ export default function SignupPage() {
         </form>
       </section>
     </main>
+  );
+}
+
+export default function SignupPage() {
+  return (
+    <Suspense fallback={null}>
+      <SignupPageContent />
+    </Suspense>
   );
 }

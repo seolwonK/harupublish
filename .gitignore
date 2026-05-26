@@ -12,6 +12,9 @@ bin/
 tmp/
 
 *.tsbuildinfo
+token.txt
+jaas
+.flow-email.tmp
 /GmarketSansTTFBold.ttf
 /GmarketSansTTFLight.ttf
 /GmarketSansTTFMedium.ttf

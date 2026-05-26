@@ -2,7 +2,7 @@
 
 import { Paperclip, Send } from "lucide-react";
 import { useSearchParams } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { ApiNotice, AppHeader, Avatar } from "../components";
 
 type ChatMessage = {
@@ -98,7 +98,7 @@ function createMessage(body: string, sender: ChatMessage["sender"], muted = fals
   };
 }
 
-export default function ChatPage() {
+function ChatPageContent() {
   const searchParams = useSearchParams();
   const [search, setSearch] = useState("");
   const [draft, setDraft] = useState("");
@@ -239,5 +239,13 @@ export default function ChatPage() {
         </section>
       </main>
     </>
+  );
+}
+
+export default function ChatPage() {
+  return (
+    <Suspense fallback={null}>
+      <ChatPageContent />
+    </Suspense>
   );
 }

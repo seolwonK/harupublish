@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ApiNotice, AppHeader, Field } from "../components";
 import { useAuth } from "../auth";
@@ -10,7 +10,7 @@ function safeRedirectTarget(value: string | null, fallback = "/account") {
   return value;
 }
 
-export default function LoginPage() {
+function LoginPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { login } = useAuth();
@@ -68,5 +68,13 @@ export default function LoginPage() {
         <a className="link-button" href={signupHref}>계정 만들기</a>
       </section>
     </main>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={null}>
+      <LoginPageContent />
+    </Suspense>
   );
 }

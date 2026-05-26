@@ -194,6 +194,7 @@ export type SessionTokens = {
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8080";
 const API_ORIGIN = new URL(API_BASE_URL).origin;
 const REQUEST_TIMEOUT_MS = 8000;
+const PUBLIC_CACHE_TTL_MS = 60_000;
 
 export class HaruApiError extends Error {
   code: string;
@@ -214,6 +215,28 @@ type RequestOptions = {
   query?: Record<string, string | number | boolean | null | undefined>;
   cache?: RequestCache;
 };
+
+type CachedValue<T> = {
+  expiresAt: number;
+  promise: Promise<T>;
+};
+
+const publicRequestCache = new Map<string, CachedValue<unknown>>();
+
+function cachedPublicRequest<T>(key: string, request: () => Promise<T>, ttlMs = PUBLIC_CACHE_TTL_MS): Promise<T> {
+  const now = Date.now();
+  const cached = publicRequestCache.get(key) as CachedValue<T> | undefined;
+  if (cached && cached.expiresAt > now) {
+    return cached.promise;
+  }
+
+  const promise = request().catch((error) => {
+    publicRequestCache.delete(key);
+    throw error;
+  });
+  publicRequestCache.set(key, { expiresAt: now + ttlMs, promise });
+  return promise;
+}
 
 async function parseApiPayload<T>(response: Response): Promise<T> {
   const payload = (await response.json().catch(() => null)) as ApiResponse<T> | ApiErrorResponse | null;
@@ -352,10 +375,10 @@ export const haruApi = {
     return apiRequest<UserMeResponse>("/api/users/me/active-role", { method: "PATCH", token, body: { activeRole } });
   },
   getTutors() {
-    return apiRequest<ExpertListResponse[]>("/api/tutors");
+    return cachedPublicRequest("tutors", () => apiRequest<ExpertListResponse[]>("/api/tutors"));
   },
   getTutor(id: number) {
-    return apiRequest<TutorProfileResponse>(`/api/tutors/${id}`);
+    return cachedPublicRequest(`tutor:${id}`, () => apiRequest<TutorProfileResponse>(`/api/tutors/${id}`));
   },
   switchToTutor(token: string) {
     return apiRequest<TutorProfileResponse>("/api/tutors/me/switch", { method: "POST", token });
@@ -411,7 +434,7 @@ export const haruApi = {
     return apiRequest<ReviewResponse>(`/api/bookings/${bookingId}/reviews`, { method: "POST", token, body });
   },
   getTutorReviews(tutorProfileId: number) {
-    return apiRequest<ReviewListResponse>(`/api/tutors/${tutorProfileId}/reviews`);
+    return cachedPublicRequest(`reviews:${tutorProfileId}`, () => apiRequest<ReviewListResponse>(`/api/tutors/${tutorProfileId}/reviews`));
   },
   createCheckout(token: string, body: { tutorProfileId: number; lessonDurationMinutes: number; lessonPackCount: number; paymentMethod: PaymentMethod }) {
     return apiRequest<PaymentResponse>("/api/payments/checkout", { method: "POST", token, body });

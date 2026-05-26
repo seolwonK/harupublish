@@ -14,7 +14,6 @@ import com.haru.common.exception.ForbiddenException;
 import com.haru.common.exception.NotFoundException;
 import com.haru.meeting.application.JitsiRoomNameGenerator;
 import com.haru.meeting.application.JitsiTokenService;
-import com.haru.payment.domain.Payment;
 import com.haru.payment.domain.PaymentStatus;
 import com.haru.payment.infra.PaymentRepository;
 import com.haru.schedule.domain.TutorScheduleSlot;
@@ -157,16 +156,12 @@ public class BookingService {
     }
 
     private void ensureRemainingLessonCredit(Long studentUserId, Long tutorProfileId, int lessonDurationMinutes) {
-        int paidLessons = paymentRepository
-                .findAllByStudentIdAndTutorProfileIdAndLessonDurationMinutesAndStatusOrderByCreatedAtAsc(
-                        studentUserId,
-                        tutorProfileId,
-                        lessonDurationMinutes,
-                        PaymentStatus.PAID
-                )
-                .stream()
-                .mapToInt(Payment::getLessonPackCount)
-                .sum();
+        int paidLessons = Math.toIntExact(paymentRepository.sumLessonPackCount(
+                studentUserId,
+                tutorProfileId,
+                lessonDurationMinutes,
+                PaymentStatus.PAID
+        ));
         long consumedLessons = bookingRepository.countByStudentIdAndTutorProfileIdAndLessonDurationMinutesAndStatusNot(
                 studentUserId,
                 tutorProfileId,
