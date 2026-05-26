@@ -108,6 +108,7 @@ export type TutorScheduleResponse = {
 export type BookingResponse = {
   id: number;
   studentUserId: number;
+  studentName: string | null;
   tutorProfileId: number;
   tutorDisplayName: string | null;
   tutorShortIntroduction: string | null;
@@ -211,6 +212,7 @@ type RequestOptions = {
   body?: unknown;
   token?: string | null;
   query?: Record<string, string | number | boolean | null | undefined>;
+  cache?: RequestCache;
 };
 
 async function parseApiPayload<T>(response: Response): Promise<T> {
@@ -242,6 +244,7 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
   try {
     response = await fetch(buildUrl(path, options.query), {
       method: options.method ?? "GET",
+      cache: options.cache,
       headers: {
         ...(options.body === undefined ? {} : { "Content-Type": "application/json" }),
         ...(options.token ? { Authorization: `Bearer ${options.token}` } : {})
@@ -381,7 +384,7 @@ export const haruApi = {
     return apiRequest<TutorProfileResponse[]>("/api/admin/tutors/pending", { token });
   },
   getPublicSchedule(tutorProfileId: number, from: string, to: string) {
-    return apiRequest<TutorScheduleResponse>(`/api/tutors/${tutorProfileId}/schedule`, { query: { from, to } });
+    return apiRequest<TutorScheduleResponse>(`/api/tutors/${tutorProfileId}/schedule`, { query: { from, to }, cache: "no-store" });
   },
   getMySchedule(token: string, from: string, to: string) {
     return apiRequest<TutorScheduleResponse>("/api/tutors/me/schedule", { token, query: { from, to } });
@@ -425,8 +428,15 @@ export const haruApi = {
 };
 
 export function toMoney(value: number | string | null | undefined) {
-  if (value === null || value === undefined || value === "") return "USD 0";
-  return `USD ${Number(value).toFixed(2)}`;
+  if (value === null || value === undefined || value === "") return "$0.00";
+  const amount = Number(value);
+  if (!Number.isFinite(amount)) return "$0.00";
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  }).format(amount);
 }
 
 export function dateRangeFromToday(days = 30) {

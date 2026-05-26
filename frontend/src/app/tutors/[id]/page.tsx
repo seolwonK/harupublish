@@ -1,9 +1,11 @@
 "use client";
 
 import { CalendarDays, CheckCircle2, Globe2, MapPin, MessageCircle, Play, ShieldCheck, Video } from "lucide-react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { use, useEffect, useMemo, useState } from "react";
 import { dateRangeFromToday, HaruApiError, haruApi, ReviewListResponse, ScheduleSlotResponse, toMoney, TutorProfileResponse, youtubeEmbedUrl } from "../../api";
 import { useAuth } from "../../auth";
+import { clearPendingBookingIntent, writePendingBookingIntent } from "../../booking-intent";
 import { ApiNotice, AppHeader, Avatar, Badge, Button, categoryLabel, EmptyState, IconMeta, Rating, SectionHeader, TimePill, TutorPortrait } from "../../components";
 import { tutors } from "../../data";
 
@@ -18,6 +20,8 @@ function formatTime(value: string) {
 export default function TutorProfilePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const numericId = Number(id);
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const { accessToken } = useAuth();
   const [tutor, setTutor] = useState<TutorProfileResponse | null>(null);
   const [slots, setSlots] = useState<ScheduleSlotResponse[]>([]);
@@ -29,6 +33,29 @@ export default function TutorProfilePage({ params }: { params: Promise<{ id: str
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const mockTutor = tutors[0];
+  const scheduleRange = useMemo(() => dateRangeFromToday(30), []);
+  const requestedSlotId = useMemo(() => {
+    const value = Number(searchParams.get("slot"));
+    return Number.isFinite(value) ? value : null;
+  }, [searchParams]);
+
+  function preferredSlotIdFrom(nextSlots: ScheduleSlotResponse[], preferredSlotId: number | null) {
+    if (preferredSlotId && nextSlots.some((slot) => slot.id === preferredSlotId && !slot.booked)) {
+      return preferredSlotId;
+    }
+    return nextSlots.find((slot) => !slot.booked)?.id ?? null;
+  }
+
+  async function refreshSchedule(preferredSlotId: number | null) {
+    if (!Number.isFinite(numericId)) {
+      return [] as ScheduleSlotResponse[];
+    }
+
+    const schedule = await haruApi.getPublicSchedule(numericId, scheduleRange.from, scheduleRange.to);
+    setSlots(schedule.slots);
+    setSelectedSlotId(preferredSlotIdFrom(schedule.slots, preferredSlotId));
+    return schedule.slots;
+  }
 
   useEffect(() => {
     if (!Number.isFinite(numericId)) {
@@ -36,17 +63,16 @@ export default function TutorProfilePage({ params }: { params: Promise<{ id: str
       return;
     }
 
-    const range = dateRangeFromToday(30);
-    Promise.all([haruApi.getTutor(numericId), haruApi.getPublicSchedule(numericId, range.from, range.to), haruApi.getTutorReviews(numericId)])
+    Promise.all([haruApi.getTutor(numericId), haruApi.getPublicSchedule(numericId, scheduleRange.from, scheduleRange.to), haruApi.getTutorReviews(numericId)])
       .then(([profile, schedule, reviews]) => {
         setTutor(profile);
         setSlots(schedule.slots);
         setReviewSummary(reviews);
-        setSelectedSlotId(schedule.slots.find((slot) => !slot.booked)?.id ?? null);
+        setSelectedSlotId(preferredSlotIdFrom(schedule.slots, requestedSlotId));
       })
       .catch((err: Error) => setError(err.message))
       .finally(() => setLoading(false));
-  }, [numericId]);
+  }, [numericId, requestedSlotId, scheduleRange.from, scheduleRange.to]);
 
   const displayName = tutor?.displayName ?? mockTutor.name;
   const languages = tutor?.availableLanguages?.join(" · ") ?? mockTutor.languages;
@@ -64,9 +90,34 @@ export default function TutorProfilePage({ params }: { params: Promise<{ id: str
   );
   const unitPrice = tutor?.lessonPrice25Amount;
 
+  function loginRedirectTarget() {
+    const slotSuffix = selectedSlotId ? `?slot=${selectedSlotId}` : "";
+    return `/tutors/${numericId}${slotSuffix}#booking`;
+  }
+
+  async function createBooking(token: string, successMessage: string) {
+    if (!tutor?.id || !selectedSlotId) {
+      throw new Error("예약 가능한 시간을 선택해 주세요.");
+    }
+
+    const currentSlotId = selectedSlotId;
+    const booking = await haruApi.createBooking(token, {
+      tutorProfileId: tutor.id,
+      scheduleSlotId: currentSlotId,
+      lessonDurationMinutes: 25
+    });
+    clearPendingBookingIntent();
+    setSlots((currentSlots) => currentSlots.map((slot) => (
+      slot.id === currentSlotId ? { ...slot, booked: true } : slot
+    )));
+    setCreatedBookingId(booking.id);
+    setMessage(successMessage);
+    return booking;
+  }
+
   async function payAndBook() {
     if (!accessToken) {
-      setError("수업을 예약하려면 먼저 로그인해 주세요.");
+      router.push(`/login?redirect=${encodeURIComponent(loginRedirectTarget())}`);
       return;
     }
     if (!tutor?.id || !selectedSlotId) {
@@ -76,19 +127,28 @@ export default function TutorProfilePage({ params }: { params: Promise<{ id: str
 
     setError(null);
     setMessage(null);
+    setCreatedBookingId(null);
     setActionLoading(true);
     try {
-      const booking = await haruApi.createBooking(accessToken, {
-        tutorProfileId: tutor.id,
-        scheduleSlotId: selectedSlotId,
-        lessonDurationMinutes: 25
-      });
-      setCreatedBookingId(booking.id);
-      setMessage("예약이 완료되었습니다. 내 예약에서 수업방을 열 수 있습니다.");
+      clearPendingBookingIntent();
+      await createBooking(accessToken, "예약이 완료되었습니다. 내 예약에서 일정을 확인할 수 있습니다.");
     } catch (err) {
+      const alreadyBooked = err instanceof HaruApiError
+        && err.code === "INVALID_REQUEST"
+        && err.message.includes("already booked");
       const needsPayment = err instanceof HaruApiError
         && err.code === "INVALID_REQUEST"
         && err.message.includes("Complete payment for this tutor before booking a lesson.");
+
+      if (alreadyBooked) {
+        try {
+          await refreshSchedule(selectedSlotId);
+        } catch {
+          // Keep the booking error visible even if the schedule refresh fails.
+        }
+        setError("방금 다른 수강생이 이 시간을 먼저 예약했습니다. 다른 시간을 선택해 주세요.");
+        return;
+      }
 
       if (!needsPayment) {
         setError(err instanceof Error ? err.message : "예약 생성에 실패했습니다.");
@@ -102,11 +162,25 @@ export default function TutorProfilePage({ params }: { params: Promise<{ id: str
           lessonPackCount: 1,
           paymentMethod: "LEMON_SQUEEZY"
         });
+
+        writePendingBookingIntent({
+          tutorProfileId: tutor.id,
+          scheduleSlotId: selectedSlotId,
+          lessonDurationMinutes: 25,
+          paymentId: payment.id,
+          createdAt: new Date().toISOString()
+        });
+
+        if (payment.status === "PAID") {
+          await createBooking(accessToken, "결제가 확인되어 예약이 완료되었습니다. 내 예약에서 일정을 확인할 수 있습니다.");
+          return;
+        }
+
         if (payment.checkoutUrl) {
           window.location.href = payment.checkoutUrl;
           return;
         }
-        setMessage(`결제가 확인되었습니다. 결제 ID ${payment.id}. 같은 버튼을 다시 누르면 예약됩니다.`);
+        router.push("/payments");
       } catch (paymentError) {
         setError(paymentError instanceof Error ? paymentError.message : "결제 요청 생성에 실패했습니다.");
       }
@@ -151,7 +225,7 @@ export default function TutorProfilePage({ params }: { params: Promise<{ id: str
             <Button as="a" href="#booking">
               <CalendarDays size={16} /> 수업 예약하기
             </Button>
-            <Button as="a" href="/chat" variant="secondary">
+            <Button as="a" href={tutor?.id ? `/chat?tutorId=${tutor.id}&name=${encodeURIComponent(displayName)}` : "/chat"} variant="secondary">
               <MessageCircle size={16} /> 메시지 보내기
             </Button>
           </div>
@@ -263,7 +337,7 @@ export default function TutorProfilePage({ params }: { params: Promise<{ id: str
             <strong>{toMoney(unitPrice)}</strong>
           </div>
 
-          <Button className="wide booking-primary-cta" onClick={() => void payAndBook()} disabled={actionLoading || !selectedSlotId}>
+          <Button className="wide booking-primary-cta" onClick={() => void payAndBook()} disabled={actionLoading || !selectedSlotId || Boolean(selectedSlot?.booked) || createdBookingId !== null}>
             <CheckCircle2 size={16} /> {actionLoading ? "진행 중..." : "Lemon Squeezy로 결제 및 예약"}
           </Button>
 
@@ -274,7 +348,7 @@ export default function TutorProfilePage({ params }: { params: Promise<{ id: str
           ) : null}
 
           <p className="notice">
-            <ShieldCheck size={14} /> Lemon Squeezy 결제가 끝나면 같은 버튼으로 예약을 완료하고, 수업 시작 10분 전부터 내 예약에서 Jitsi 수업방에 입장할 수 있습니다.
+            <ShieldCheck size={14} /> Lemon Squeezy 결제가 끝나면 결제 내역 화면에서 예약을 자동으로 완료하고, 수업 시작 10분 전부터 내 예약에서 Jitsi 수업방에 입장할 수 있습니다.
           </p>
         </aside>
       </section>

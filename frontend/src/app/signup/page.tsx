@@ -1,12 +1,18 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "../auth";
 import { ApiNotice, AppHeader, Field, TimeZoneSelect } from "../components";
 
+function safeRedirectTarget(value: string | null, fallback = "/account") {
+  if (!value?.startsWith("/")) return fallback;
+  return value;
+}
+
 export default function SignupPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { signup } = useAuth();
   const [form, setForm] = useState({
     email: "",
@@ -16,6 +22,7 @@ export default function SignupPage() {
   });
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const redirectTarget = safeRedirectTarget(searchParams.get("redirect"));
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
@@ -23,7 +30,7 @@ export default function SignupPage() {
     setLoading(true);
     try {
       await signup(form);
-      router.push("/account");
+      router.push(redirectTarget);
     } catch (err) {
       setError(err instanceof Error ? err.message : "회원가입에 실패했습니다.");
     } finally {

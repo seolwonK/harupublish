@@ -1,9 +1,10 @@
 "use client";
 
-import { ExternalLink, RefreshCcw, WalletCards } from "lucide-react";
+import { CheckCircle2, ExternalLink, RefreshCcw, WalletCards } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { haruApi, PaymentResponse, toMoney } from "../api";
 import { useAuth } from "../auth";
+import { clearPendingBookingIntent, PendingBookingIntent, readPendingBookingIntent } from "../booking-intent";
 import { ApiNotice, AppHeader, Badge, Button, EmptyState, SectionHeader, StatCard, statusLabel } from "../components";
 
 function paymentMethodLabel(method: PaymentResponse["paymentMethod"]) {
@@ -28,6 +29,11 @@ export default function PaymentsPage() {
   const [payments, setPayments] = useState<PaymentResponse[]>([]);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [pendingBookingIntent, setPendingBookingIntent] = useState<PendingBookingIntent | null>(null);
+  const [resumeMessage, setResumeMessage] = useState<string | null>(null);
+  const [resumeError, setResumeError] = useState<string | null>(null);
+  const [createdBookingId, setCreatedBookingId] = useState<number | null>(null);
+  const [resumeNonce, setResumeNonce] = useState(0);
 
   const pendingCount = useMemo(() => payments.filter((payment) => payment.status === "PENDING").length, [payments]);
   const paidCount = useMemo(() => payments.filter((payment) => payment.status === "PAID").length, [payments]);
@@ -35,6 +41,13 @@ export default function PaymentsPage() {
     () => payments.reduce((sum, payment) => sum + Number(payment.totalAmount ?? 0), 0),
     [payments]
   );
+
+  function mergePayment(nextPayment: PaymentResponse) {
+    setPayments((current) => {
+      const filtered = current.filter((payment) => payment.id !== nextPayment.id);
+      return [nextPayment, ...filtered].sort((left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime());
+    });
+  }
 
   function loadPayments() {
     if (!accessToken) return;
@@ -46,6 +59,90 @@ export default function PaymentsPage() {
   }
 
   useEffect(loadPayments, [accessToken]);
+
+  useEffect(() => {
+    setPendingBookingIntent(readPendingBookingIntent());
+  }, [accessToken]);
+
+  useEffect(() => {
+    if (!accessToken || !pendingBookingIntent) return;
+
+    const token = accessToken;
+    const intent = pendingBookingIntent;
+    let cancelled = false;
+
+    async function resumeBookingAfterPayment() {
+      setResumeError(null);
+      setResumeMessage("결제 상태를 확인하는 중입니다. 완료되면 예약을 자동으로 마무리합니다.");
+
+      for (let attempt = 0; attempt < 24; attempt += 1) {
+        if (cancelled) return;
+
+        try {
+          const payment = await haruApi.getPayment(token, intent.paymentId);
+          if (cancelled) return;
+
+          mergePayment(payment);
+
+          if (payment.status === "PAID") {
+            setResumeMessage("결제가 확인되었습니다. 예약을 완료하는 중입니다.");
+
+            try {
+              const booking = await haruApi.createBooking(token, {
+                tutorProfileId: intent.tutorProfileId,
+                scheduleSlotId: intent.scheduleSlotId,
+                lessonDurationMinutes: intent.lessonDurationMinutes
+              });
+
+              if (cancelled) return;
+
+              clearPendingBookingIntent();
+              setPendingBookingIntent(null);
+              setCreatedBookingId(booking.id);
+              setResumeMessage("결제가 확인되어 예약이 완료되었습니다.");
+              return;
+            } catch (bookingError) {
+              if (cancelled) return;
+
+              clearPendingBookingIntent();
+              setPendingBookingIntent(null);
+              setResumeMessage(null);
+              setResumeError(bookingError instanceof Error ? bookingError.message : "결제 후 예약 자동 완료에 실패했습니다.");
+              return;
+            }
+          }
+
+          if (payment.status === "FAILED" || payment.status === "CANCELLED" || payment.status === "REFUNDED") {
+            clearPendingBookingIntent();
+            setPendingBookingIntent(null);
+            setResumeMessage(null);
+            setResumeError("결제가 완료되지 않아 예약을 자동으로 만들지 않았습니다.");
+            return;
+          }
+        } catch (resumeFailure) {
+          if (cancelled) return;
+
+          if (attempt === 23) {
+            setResumeMessage(null);
+            setResumeError(resumeFailure instanceof Error ? resumeFailure.message : "결제 상태 확인에 실패했습니다.");
+            return;
+          }
+        }
+
+        await new Promise((resolve) => window.setTimeout(resolve, 2500));
+      }
+
+      if (!cancelled) {
+        setResumeMessage("결제 확인이 지연되고 있습니다. 아래 결제 내역에서 상태를 다시 확인해 주세요.");
+      }
+    }
+
+    void resumeBookingAfterPayment();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [accessToken, pendingBookingIntent, resumeNonce]);
 
   async function requestRefund(paymentId: number) {
     if (!accessToken) return;
@@ -83,6 +180,22 @@ export default function PaymentsPage() {
 
           {message ? <ApiNotice type="success">{message}</ApiNotice> : null}
           {error ? <ApiNotice type="error">{error}</ApiNotice> : null}
+          {resumeMessage ? <ApiNotice type={createdBookingId ? "success" : "info"}>{resumeMessage}</ApiNotice> : null}
+          {resumeError ? <ApiNotice type="error">{resumeError}</ApiNotice> : null}
+          {pendingBookingIntent && !createdBookingId ? (
+            <div className="button-row">
+              <Button variant="secondary" onClick={() => setResumeNonce((value) => value + 1)}>
+                <RefreshCcw size={14} /> 결제 상태 다시 확인
+              </Button>
+            </div>
+          ) : null}
+          {createdBookingId ? (
+            <div className="button-row">
+              <Button as="a" href="/bookings">
+                <CheckCircle2 size={16} /> 내 예약 보기
+              </Button>
+            </div>
+          ) : null}
           {!accessToken ? (
             <div className="booking-empty-panel">
               <EmptyState title="로그인이 필요합니다" body="결제 내역을 보려면 먼저 로그인해주세요." />

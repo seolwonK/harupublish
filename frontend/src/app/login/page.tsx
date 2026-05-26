@@ -1,17 +1,25 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { ApiNotice, AppHeader, Field } from "../components";
 import { useAuth } from "../auth";
 
+function safeRedirectTarget(value: string | null, fallback = "/account") {
+  if (!value?.startsWith("/")) return fallback;
+  return value;
+}
+
 export default function LoginPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { login } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const redirectTarget = safeRedirectTarget(searchParams.get("redirect"));
+  const signupHref = redirectTarget === "/account" ? "/signup" : `/signup?redirect=${encodeURIComponent(redirectTarget)}`;
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
@@ -19,7 +27,7 @@ export default function LoginPage() {
     setError(null);
     try {
       await login(email, password);
-      router.push("/account");
+      router.push(redirectTarget);
     } catch (err) {
       setError(err instanceof Error ? err.message : "로그인에 실패했습니다.");
     } finally {
@@ -57,7 +65,7 @@ export default function LoginPage() {
             {loading ? "로그인 중" : "로그인"}
           </button>
         </form>
-        <a className="link-button" href="/signup">계정 만들기</a>
+        <a className="link-button" href={signupHref}>계정 만들기</a>
       </section>
     </main>
   );
