@@ -157,6 +157,7 @@ function HomeTutorCard({ tutor, featured = false }: { tutor: HomeTutor; featured
 
 export default function HomePage() {
   const { accessToken, loading: authLoading } = useAuth();
+  const [searchQuery, setSearchQuery] = useState("");
   const [experts, setExperts] = useState<ExpertListResponse[]>([]);
   const [slots, setSlots] = useState<ScheduleSlotResponse[]>([]);
   const [bookings, setBookings] = useState<BookingResponse[]>([]);
@@ -242,21 +243,32 @@ export default function HomePage() {
           <p>
             Haru는 한국어와 한국 문화를 배우는 학생이 신뢰할 수 있는 튜터를 찾고, 예약과 결제, Jitsi Meet 수업까지 한 번에 이어가도록 돕습니다.
           </p>
-          <div className="hero-search-row">
-            <div className="hero-search" role="search">
+          <form
+            className="hero-search-row"
+            onSubmit={(event) => {
+              event.preventDefault();
+              const query = searchQuery.trim();
+              window.location.href = query ? `/tutors?q=${encodeURIComponent(query)}` : "/tutors";
+            }}
+          >
+            <label className="hero-search">
               <Search size={19} />
-              <span>수업 주제, 튜터 이름, 관심사를 검색해보세요</span>
-              <a href="/tutors">
+              <input
+                value={searchQuery}
+                onChange={(event) => setSearchQuery(event.target.value)}
+                placeholder="수업 주제, 튜터 이름, 관심사를 검색해보세요"
+              />
+              <button type="submit">
                 튜터 찾기 <ArrowRight size={16} />
-              </a>
-            </div>
+              </button>
+            </label>
             <a className="secondary-cta" href="#today">
               오늘 할 일
             </a>
-          </div>
+          </form>
           <div className="category-row" aria-label="추천 수업 주제">
             {categories.map((category) => (
-              <a href="/tutors" key={category}>
+              <a href={`/tutors?q=${encodeURIComponent(category)}`} key={category}>
                 {category}
               </a>
             ))}
