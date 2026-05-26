@@ -6,9 +6,9 @@ spring:
       max-file-size: 5MB
       max-request-size: 5MB
   datasource:
-    url: jdbc:mysql://localhost:3306/haru?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC&useUnicode=true&characterEncoding=UTF-8&connectionCollation=utf8mb4_unicode_ci
-    username: haru
-    password: haru
+    url: ${SPRING_DATASOURCE_URL:jdbc:mysql://localhost:3306/haru?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC&useUnicode=true&characterEncoding=UTF-8&connectionCollation=utf8mb4_unicode_ci}
+    username: ${SPRING_DATASOURCE_USERNAME:haru}
+    password: ${SPRING_DATASOURCE_PASSWORD:haru}
     hikari:
       maximum-pool-size: ${DB_POOL_MAX_SIZE:10}
       minimum-idle: ${DB_POOL_MIN_IDLE:2}
@@ -57,9 +57,9 @@ haru:
   cors:
     allowed-origin-patterns: ${HARU_CORS_ALLOWED_ORIGIN_PATTERNS:http://localhost:3000,http://127.0.0.1:3000,http://localhost:3001,http://127.0.0.1:3001,http://localhost:3002,http://127.0.0.1:3002}
   jwt:
-    secret: "change-this-local-development-secret-key-minimum-32-bytes"
-    access-token-expiration-minutes: 30
-    refresh-token-expiration-days: 14
+    secret: ${HARU_JWT_SECRET:change-this-local-development-secret-key-minimum-32-bytes}
+    access-token-expiration-minutes: ${HARU_JWT_ACCESS_TOKEN_EXPIRATION_MINUTES:30}
+    refresh-token-expiration-days: ${HARU_JWT_REFRESH_TOKEN_EXPIRATION_DAYS:14}
   payments:
     lemon-squeezy:
       enabled: ${LEMON_SQUEEZY_ENABLED:false}
