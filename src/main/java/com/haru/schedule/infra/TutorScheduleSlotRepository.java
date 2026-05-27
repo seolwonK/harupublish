@@ -28,6 +28,19 @@ public interface TutorScheduleSlotRepository extends JpaRepository<TutorSchedule
             Instant to
     );
 
+    List<TutorScheduleSlot> findAllByTutorProfileIdOrderByStartAtAsc(Long tutorProfileId);
+
     @Modifying
     void deleteAllByTutorProfileId(Long tutorProfileId);
+
+    @Modifying
+    @Query("""
+            delete from TutorScheduleSlot slot
+            where slot.tutorProfile.id = :tutorProfileId
+              and slot.id not in :slotIds
+            """)
+    void deleteAllByTutorProfileIdAndIdNotIn(
+            @Param("tutorProfileId") Long tutorProfileId,
+            @Param("slotIds") List<Long> slotIds
+    );
 }

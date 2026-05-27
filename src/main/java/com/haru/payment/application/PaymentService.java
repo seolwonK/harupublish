@@ -23,18 +23,16 @@ import com.haru.user.domain.UserAccount;
 import com.haru.user.infra.UserAccountRepository;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
-import java.time.Duration;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
-import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
 
@@ -47,6 +45,7 @@ public class PaymentService {
     private final LemonSqueezyClient lemonSqueezyClient;
     private final LemonSqueezyProperties lemonSqueezyProperties;
     private final ObjectMapper objectMapper;
+    private final Environment environment;
 
     public PaymentService(
             UserAccountRepository userAccountRepository,
@@ -54,7 +53,8 @@ public class PaymentService {
             PaymentRepository paymentRepository,
             LemonSqueezyClient lemonSqueezyClient,
             LemonSqueezyProperties lemonSqueezyProperties,
-            ObjectMapper objectMapper
+            ObjectMapper objectMapper,
+            Environment environment
     ) {
         this.userAccountRepository = userAccountRepository;
         this.tutorProfileRepository = tutorProfileRepository;
@@ -62,6 +62,7 @@ public class PaymentService {
         this.lemonSqueezyClient = lemonSqueezyClient;
         this.lemonSqueezyProperties = lemonSqueezyProperties;
         this.objectMapper = objectMapper;
+        this.environment = environment;
     }
 
     @Transactional
@@ -91,7 +92,7 @@ public class PaymentService {
         if (lemonSqueezyClient.isEnabled()) {
             LemonSqueezyCheckout checkout = lemonSqueezyClient.createCheckout(payment);
             payment.attachCheckout(LemonSqueezyClient.PROVIDER, checkout.id(), checkout.url());
-        } else if (lemonSqueezyProperties.isMockPaidCheckoutEnabled()) {
+        } else if (isMockPaidCheckoutAllowed()) {
             payment.markPaid();
         } else {
             throw new BusinessException(
@@ -207,64 +208,23 @@ public class PaymentService {
 
     private void syncPendingPayments(Long userId) {
         List<Payment> pendingPayments = paymentRepository.findAllByStudentIdAndStatusOrderByCreatedAtDesc(userId, PaymentStatus.PENDING);
-        if (pendingPayments.isEmpty()) {
-            return;
-        }
-
-        List<LemonSqueezyOrder> userOrders = lemonSqueezyClient.listOrdersByUserEmail(pendingPayments.get(0).getStudent().getEmail());
-        pendingPayments.forEach(payment -> syncPaymentStatus(payment, userOrders));
-
-        List<Payment> stillPending = pendingPayments.stream()
-                .filter(payment -> payment.getStatus() == PaymentStatus.PENDING)
-                .toList();
-        if (!stillPending.isEmpty()) {
-            List<LemonSqueezyOrder> recentOrders = lemonSqueezyClient.listRecentOrders();
-            stillPending.forEach(payment -> syncPaymentStatus(payment, recentOrders));
-        }
+        pendingPayments.forEach(this::syncPaymentStatus);
     }
 
     private void syncPaymentStatus(Payment payment) {
         if (!canSyncPaymentStatus(payment)) {
             return;
         }
-        syncPaymentStatus(payment, lemonSqueezyClient.listOrdersByUserEmail(payment.getStudent().getEmail()));
-    }
-
-    private void syncPaymentStatus(Payment payment, List<LemonSqueezyOrder> userOrders) {
-        if (!canSyncPaymentStatus(payment)) {
+        if (!StringUtils.hasText(payment.getProviderOrderId())) {
             return;
         }
-
-        Optional<LemonSqueezyOrder> matchedOrder = StringUtils.hasText(payment.getProviderOrderId())
-                ? lemonSqueezyClient.retrieveOrder(payment.getProviderOrderId())
-                : findMatchingOrder(payment, userOrders);
-
+        Optional<LemonSqueezyOrder> matchedOrder = lemonSqueezyClient.retrieveOrder(payment.getProviderOrderId());
         matchedOrder.ifPresent(order -> applyProviderOrder(payment, order));
     }
 
     private boolean canSyncPaymentStatus(Payment payment) {
         return payment.getStatus() == PaymentStatus.PENDING
                 && payment.getPaymentMethod() == PaymentMethod.LEMON_SQUEEZY;
-    }
-
-    private Optional<LemonSqueezyOrder> findMatchingOrder(Payment payment, List<LemonSqueezyOrder> userOrders) {
-        long expectedProviderTotal = lemonSqueezyClient.toProviderMinorUnits(payment.getTotalAmount());
-        String expectedVariantId = lemonSqueezyProperties.getVariantId();
-        boolean testMode = lemonSqueezyProperties.isTestMode();
-
-        return userOrders.stream()
-                .filter(order -> order.testMode() == testMode)
-                .filter(order -> expectedVariantId.equals(order.variantId()))
-                .filter(order -> !order.createdAt().isBefore(payment.getCreatedAt().minus(Duration.ofMinutes(2))))
-                .filter(order -> matchesExpectedTotal(order, expectedProviderTotal))
-                .filter(order -> !StringUtils.hasText(order.id()) || !paymentRepository.existsByProviderOrderIdAndIdNot(order.id(), payment.getId()))
-                .sorted(Comparator.comparing(LemonSqueezyOrder::createdAt))
-                .findFirst();
-    }
-
-    private boolean matchesExpectedTotal(LemonSqueezyOrder order, long expectedProviderTotal) {
-        return Math.abs(order.total() - expectedProviderTotal) <= 1000L
-                || (order.totalUsd() > 0 && Math.abs(order.totalUsd() - expectedProviderTotal) <= 1000L);
     }
 
     private void applyProviderOrder(Payment payment, LemonSqueezyOrder order) {
@@ -309,5 +269,11 @@ public class PaymentService {
             result.append(String.format("%02x", item));
         }
         return result.toString();
+    }
+
+    private boolean isMockPaidCheckoutAllowed() {
+        return lemonSqueezyProperties.isMockPaidCheckoutEnabled()
+                && List.of(environment.getActiveProfiles()).stream()
+                        .anyMatch(profile -> profile.equals("test") || profile.equals("local") || profile.equals("dev"));
     }
 }

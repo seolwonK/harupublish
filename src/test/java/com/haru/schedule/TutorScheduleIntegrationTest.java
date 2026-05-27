@@ -116,6 +116,46 @@ class TutorScheduleIntegrationTest {
                 .andExpect(jsonPath("$.error.code").value("INVALID_REQUEST"));
     }
 
+    @Test
+    void replacingSchedulePreservesReservedSlots() throws Exception {
+        String tutorAccessToken = signupAndGetAccessToken("schedule-booked-tutor@example.com");
+        long tutorProfileId = switchToTutorAndGetProfileId(tutorAccessToken);
+        approveTutorProfile(tutorAccessToken, tutorProfileId);
+
+        saveSchedule(tutorAccessToken, "2031-05-20T01:00:00Z", "2031-05-20T01:30:00Z");
+        long bookedSlotId = firstScheduleSlotId(tutorAccessToken, "2031-05-20T00:00:00Z", "2031-05-20T03:00:00Z");
+
+        String studentToken = signupAndGetAccessToken("schedule-booked-student@example.com");
+        createPaidCheckout(studentToken, tutorProfileId);
+        mockMvc.perform(post("/api/bookings")
+                        .header("Authorization", auth(studentToken))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "tutorProfileId": %d,
+                                  "scheduleSlotId": %d,
+                                  "lessonDurationMinutes": 25
+                                }
+                                """.formatted(tutorProfileId, bookedSlotId)))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(put("/api/tutors/me/schedule")
+                        .header("Authorization", auth(tutorAccessToken))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "slots": [
+                                    { "startAt": "2031-05-20T02:00:00Z" }
+                                  ]
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.slots.length()").value(2))
+                .andExpect(jsonPath("$.data.slots[0].id").value(bookedSlotId))
+                .andExpect(jsonPath("$.data.slots[0].booked").value(true))
+                .andExpect(jsonPath("$.data.slots[1].startAt").value("2031-05-20T02:00:00Z"));
+    }
+
     private long switchToTutorAndGetProfileId(String accessToken) throws Exception {
         String response = mockMvc.perform(post("/api/tutors/me/switch")
                         .header("Authorization", auth(accessToken)))
@@ -132,7 +172,7 @@ class TutorScheduleIntegrationTest {
                         .header("Authorization", auth(tutorAccessToken)))
                 .andExpect(status().isOk());
 
-        String adminAccessToken = createAdminAndLogin();
+        String adminAccessToken = createAdminAndLogin("admin-schedule-flow-%d@example.com".formatted(tutorProfileId));
         mockMvc.perform(patch("/api/admin/tutors/%d/approve".formatted(tutorProfileId))
                         .header("Authorization", auth(adminAccessToken)))
                 .andExpect(status().isOk());
@@ -162,14 +202,52 @@ class TutorScheduleIntegrationTest {
                 .andExpect(status().isOk());
     }
 
-    private String createAdminAndLogin() throws Exception {
-        signupAndGetAccessToken("admin-schedule-flow@example.com");
-        UserAccount admin = userAccountRepository.findByEmail("admin-schedule-flow@example.com")
+    private void saveSchedule(String tutorAccessToken, String... startTimes) throws Exception {
+        String slotsJson = java.util.Arrays.stream(startTimes)
+                .map(startAt -> "{ \"startAt\": \"%s\" }".formatted(startAt))
+                .collect(java.util.stream.Collectors.joining(","));
+        mockMvc.perform(put("/api/tutors/me/schedule")
+                        .header("Authorization", auth(tutorAccessToken))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"slots\":[%s]}".formatted(slotsJson)))
+                .andExpect(status().isOk());
+    }
+
+    private long firstScheduleSlotId(String tutorAccessToken, String from, String to) throws Exception {
+        String response = mockMvc.perform(get("/api/tutors/me/schedule")
+                        .header("Authorization", auth(tutorAccessToken))
+                        .param("from", from)
+                        .param("to", to))
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+        return objectMapper.readTree(response).get("data").get("slots").get(0).get("id").asLong();
+    }
+
+    private void createPaidCheckout(String studentToken, long tutorProfileId) throws Exception {
+        mockMvc.perform(post("/api/payments/checkout")
+                        .header("Authorization", auth(studentToken))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "tutorProfileId": %d,
+                                  "lessonDurationMinutes": 25,
+                                  "lessonPackCount": 1,
+                                  "paymentMethod": "LEMON_SQUEEZY"
+                                }
+                                """.formatted(tutorProfileId)))
+                .andExpect(status().isOk());
+    }
+
+    private String createAdminAndLogin(String email) throws Exception {
+        signupAndGetAccessToken(email);
+        UserAccount admin = userAccountRepository.findByEmail(email)
                 .orElseThrow();
         admin.addRole(Role.ADMIN);
         admin.changeActiveRole(Role.ADMIN);
         userAccountRepository.save(admin);
-        return loginAndGetAccessToken("admin-schedule-flow@example.com");
+        return loginAndGetAccessToken(email);
     }
 
     private String signupAndGetAccessToken(String email) throws Exception {

@@ -17,9 +17,14 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 @Service
 public class TutorScheduleService {
@@ -45,14 +50,39 @@ public class TutorScheduleService {
     public TutorScheduleResponse replaceMySchedule(Long userId, TutorScheduleRequest request) {
         TutorProfile profile = getProfileByUserId(userId);
         List<Instant> startTimes = validateAndNormalizeSlots(request);
+        Map<Instant, TutorScheduleSlot> existingSlotsByStartAt = tutorScheduleSlotRepository.findAllByTutorProfileIdOrderByStartAtAsc(profile.getId())
+                .stream()
+                .collect(Collectors.toMap(TutorScheduleSlot::getStartAt, Function.identity()));
+        Set<Long> bookedSlotIds = new HashSet<>(
+                bookingRepository.findScheduleSlotIdsByTutorProfileIdAndStatus(profile.getId(), BookingStatus.RESERVED)
+        );
 
-        tutorScheduleSlotRepository.deleteAllByTutorProfileId(profile.getId());
-        List<TutorScheduleSlot> slots = tutorScheduleSlotRepository.saveAll(
-                startTimes.stream()
-                        .map(startAt -> TutorScheduleSlot.of(profile, startAt, startAt.plus(SLOT_DURATION)))
+        if (bookedSlotIds.isEmpty()) {
+            tutorScheduleSlotRepository.deleteAllByTutorProfileId(profile.getId());
+        } else {
+            tutorScheduleSlotRepository.deleteAllByTutorProfileIdAndIdNotIn(profile.getId(), List.copyOf(bookedSlotIds));
+        }
+
+        List<TutorScheduleSlot> slots = new ArrayList<>();
+        for (Instant startAt : startTimes) {
+            TutorScheduleSlot existingSlot = existingSlotsByStartAt.get(startAt);
+            if (existingSlot != null && bookedSlotIds.contains(existingSlot.getId())) {
+                slots.add(existingSlot);
+            } else {
+                slots.add(TutorScheduleSlot.of(profile, startAt, startAt.plus(SLOT_DURATION)));
+            }
+        }
+        existingSlotsByStartAt.values().stream()
+                .filter(slot -> bookedSlotIds.contains(slot.getId()))
+                .filter(slot -> !startTimes.contains(slot.getStartAt()))
+                .forEach(slots::add);
+
+        List<TutorScheduleSlot> savedSlots = tutorScheduleSlotRepository.saveAll(
+                slots.stream()
+                        .sorted((left, right) -> left.getStartAt().compareTo(right.getStartAt()))
                         .toList()
         );
-        return TutorScheduleResponse.from(slots, List.of());
+        return TutorScheduleResponse.from(savedSlots, bookedSlotIds);
     }
 
     @Transactional(readOnly = true)
@@ -68,18 +98,18 @@ public class TutorScheduleService {
         return buildScheduleResponse(profile.getId(), from, to);
     }
 
-        private TutorScheduleResponse buildScheduleResponse(Long tutorProfileId, Instant from, Instant to) {
+    private TutorScheduleResponse buildScheduleResponse(Long tutorProfileId, Instant from, Instant to) {
         List<TutorScheduleSlot> slots = findSlots(tutorProfileId, from, to);
         Set<Long> bookedSlotIds = Set.copyOf(
-            bookingRepository.findScheduleSlotIdsByTutorProfileIdAndStatusAndStartAtGreaterThanEqualAndStartAtLessThan(
-                tutorProfileId,
-                BookingStatus.RESERVED,
-                from,
-                to
-            )
+                bookingRepository.findScheduleSlotIdsByTutorProfileIdAndStatusAndStartAtGreaterThanEqualAndStartAtLessThan(
+                        tutorProfileId,
+                        BookingStatus.RESERVED,
+                        from,
+                        to
+                )
         );
         return TutorScheduleResponse.from(slots, bookedSlotIds);
-        }
+    }
 
     private List<TutorScheduleSlot> findSlots(Long tutorProfileId, Instant from, Instant to) {
         validateRange(from, to);

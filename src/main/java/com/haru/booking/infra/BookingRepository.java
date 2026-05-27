@@ -15,6 +15,17 @@ public interface BookingRepository extends JpaRepository<Booking, Long> {
 
     boolean existsByScheduleSlotIdAndStatus(Long scheduleSlotId, BookingStatus status);
 
+    @Query("""
+            select b.scheduleSlot.id
+            from Booking b
+            where b.tutorProfile.id = :tutorProfileId
+              and b.status = :status
+            """)
+    List<Long> findScheduleSlotIdsByTutorProfileIdAndStatus(
+            @Param("tutorProfileId") Long tutorProfileId,
+            @Param("status") BookingStatus status
+    );
+
     @EntityGraph(attributePaths = {"student", "tutorProfile", "tutorProfile.user", "scheduleSlot"})
     Optional<Booking> findWithDetailsById(Long id);
 
