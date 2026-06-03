@@ -1,6 +1,7 @@
 "use client";
 
 import { Suspense, useState } from "react";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "../auth";
 import { ApiNotice, AppHeader, Field, TimeZoneSelect } from "../components";
@@ -20,6 +21,7 @@ function SignupPageContent() {
     name: "",
     timeZone: "Asia/Seoul"
   });
+  const [agreed, setAgreed] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const redirectTarget = safeRedirectTarget(searchParams.get("redirect"));
@@ -27,6 +29,10 @@ function SignupPageContent() {
   async function submit(event: React.FormEvent) {
     event.preventDefault();
     setError(null);
+    if (!agreed) {
+      setError("이용약관 및 개인정보처리방침에 동의해야 가입할 수 있습니다.");
+      return;
+    }
     setLoading(true);
     try {
       await signup(form);
@@ -58,11 +64,60 @@ function SignupPageContent() {
           <Field label="타임존" hint="수업 시간 표시와 스케줄 선택에 사용합니다.">
             <TimeZoneSelect value={form.timeZone} onChange={(timeZone) => setForm({ ...form, timeZone })} />
           </Field>
-          <button className="primary-button wide" disabled={loading}>
+          <label className="consent-row">
+            <input
+              type="checkbox"
+              checked={agreed}
+              onChange={(event) => setAgreed(event.target.checked)}
+              aria-required="true"
+            />
+            <span>
+              <Link href="/terms" target="_blank" rel="noopener noreferrer">
+                이용약관
+              </Link>{" "}
+              및{" "}
+              <Link href="/privacy" target="_blank" rel="noopener noreferrer">
+                개인정보처리방침
+              </Link>
+              에 동의합니다. <em>(필수)</em>
+            </span>
+          </label>
+          <button className="primary-button wide" disabled={loading || !agreed}>
             {loading ? "가입 중" : "가입하기"}
           </button>
         </form>
       </section>
+
+      <style>{`
+        .consent-row {
+          display: flex;
+          align-items: flex-start;
+          gap: 10px;
+          margin-top: 4px;
+          font-size: 14px;
+          line-height: 1.6;
+          color: var(--ink);
+          cursor: pointer;
+        }
+        .consent-row input[type="checkbox"] {
+          width: 18px;
+          height: 18px;
+          margin-top: 2px;
+          flex-shrink: 0;
+          accent-color: var(--brand);
+          cursor: pointer;
+        }
+        .consent-row a {
+          color: var(--brand-dark);
+          font-weight: 700;
+          text-decoration: underline;
+        }
+        .consent-row em {
+          font-style: normal;
+          color: var(--brand);
+          font-weight: 700;
+        }
+      `}</style>
     </main>
   );
 }

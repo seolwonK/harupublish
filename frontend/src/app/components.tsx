@@ -2,6 +2,7 @@
 
 import {
   ArrowLeft,
+  Banknote,
   Bell,
   CalendarDays,
   CheckCircle2,
@@ -15,6 +16,7 @@ import {
   Send,
   Settings,
   ShieldCheck,
+  SlidersHorizontal,
   Star,
   Users,
   Video,
@@ -27,6 +29,7 @@ import { useState } from "react";
 import type { ExpertListResponse, Role } from "./api";
 import { haruApi, resolveAssetUrl, toMoney } from "./api";
 import { useAuth } from "./auth";
+import { useCurrency } from "./currency";
 import type { Booking, Tutor } from "./data";
 
 const DEFAULT_TUTOR_IMAGE = "/images/default-tutor-profile.png";
@@ -230,6 +233,34 @@ export function RoleModeSwitcher({ compact = false }: { compact?: boolean }) {
   );
 }
 
+export function CurrencyToggle() {
+  const { displayCurrency, fxRate, setDisplayCurrency } = useCurrency();
+  const krwDisabled = fxRate === null;
+
+  return (
+    <div className="currency-toggle" role="group" aria-label="표시 통화 전환">
+      <button
+        type="button"
+        className={cn("currency-toggle-button", displayCurrency === "USD" && "selected")}
+        onClick={() => setDisplayCurrency("USD")}
+        aria-pressed={displayCurrency === "USD"}
+      >
+        USD
+      </button>
+      <button
+        type="button"
+        className={cn("currency-toggle-button", displayCurrency === "KRW" && "selected")}
+        onClick={() => setDisplayCurrency("KRW")}
+        aria-pressed={displayCurrency === "KRW"}
+        disabled={krwDisabled}
+        title={krwDisabled ? "환율 정보를 불러오지 못해 USD로만 표시합니다." : undefined}
+      >
+        KRW
+      </button>
+    </div>
+  );
+}
+
 export function AppHeader() {
   const { user, logout } = useAuth();
   const pathname = usePathname();
@@ -271,6 +302,7 @@ export function AppHeader() {
         ))}
       </nav>
       <div className="header-actions">
+        <CurrencyToggle />
         {user ? (
           <>
             <RoleModeSwitcher compact />
@@ -300,6 +332,8 @@ export function Sidebar({ admin = false }: { admin?: boolean }) {
     ["튜터 승인", ShieldCheck, "/admin/tutors"],
     ["예약 관리", CalendarDays, "/admin"],
     ["결제/정산", CreditCard, "/admin"],
+    ["수수료 설정", SlidersHorizontal, "/admin/settings"],
+    ["인출 관리", Banknote, "/admin/withdrawals"],
     ["신고/후기", Bell, "/admin"],
     ["통계", LayoutDashboard, "/admin"]
   ];
@@ -309,7 +343,7 @@ export function Sidebar({ admin = false }: { admin?: boolean }) {
     ["일정 관리", CalendarDays, "/tutor/schedule"],
     ["레슨 프로필", Users, "/tutor/profile"],
     ["채팅", MessageCircle, "/chat"],
-    ["수익 관리", Wallet, "/tutor/dashboard"],
+    ["수익 관리", Wallet, "/tutor/earnings"],
     ["설정", Settings, "/account"]
   ];
   const items = admin ? adminItems : tutorItems;
@@ -538,7 +572,13 @@ export function statusLabel(status: string | null | undefined) {
     PAID: "결제 완료",
     FAILED: "실패",
     REFUNDED: "환불 완료",
-    REFUND_REQUESTED: "환불 요청"
+    REFUND_REQUESTED: "환불 요청",
+    REQUESTED: "요청됨",
+    REVERSED: "취소(환원)",
+    OPEN: "집계 중",
+    CLOSED: "마감",
+    FINALIZED: "확정",
+    NO_SHOW: "노쇼"
   };
   return labels[status ?? ""] ?? status ?? "-";
 }
@@ -584,5 +624,236 @@ export function IconMeta({ icon: Icon, children }: { icon: IconType; children: R
       <Icon size={15} />
       {children}
     </span>
+  );
+}
+
+export function Footer() {
+  const year = new Date().getFullYear();
+  return (
+    <footer className="site-footer">
+      <div className="site-footer-inner">
+        <div className="site-footer-brand">
+          <BrandLogo />
+          <p>실시간 한국어 · K-pop · K-beauty · 라이프스타일 레슨을 연결하는 Haru 플랫폼.</p>
+        </div>
+        <nav className="site-footer-links" aria-label="법적 고지">
+          <Link href="/terms">이용약관</Link>
+          <Link href="/privacy">개인정보처리방침</Link>
+          <a href="mailto:bridgoworld@gmail.com">문의하기</a>
+        </nav>
+      </div>
+      <div className="site-footer-bottom">
+        <span>© {year} Haru. All rights reserved.</span>
+        <span>Contact: bridgoworld@gmail.com</span>
+      </div>
+
+      <style>{`
+        .site-footer {
+          width: min(1180px, calc(100vw - 40px));
+          margin: 40px auto 24px;
+          padding: 32px clamp(20px, 4vw, 40px) 20px;
+          background: var(--panel);
+          border: 1px solid var(--line);
+          border-radius: 18px;
+          box-shadow: var(--shadow-soft);
+        }
+        .site-footer-inner {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 28px;
+          justify-content: space-between;
+          align-items: flex-start;
+        }
+        .site-footer-brand {
+          max-width: 360px;
+        }
+        .site-footer-brand p {
+          margin: 14px 0 0;
+          color: var(--muted);
+          font-size: 14px;
+          line-height: 1.7;
+        }
+        .site-footer-links {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 18px 26px;
+          align-items: center;
+        }
+        .site-footer-links a {
+          color: var(--ink);
+          font-size: 14px;
+          font-weight: 600;
+          transition: color 160ms ease;
+        }
+        .site-footer-links a:hover {
+          color: var(--brand-dark);
+        }
+        .site-footer-bottom {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 8px 20px;
+          justify-content: space-between;
+          margin-top: 26px;
+          padding-top: 18px;
+          border-top: 1px solid var(--line);
+          color: var(--muted);
+          font-size: 13px;
+        }
+        @media (max-width: 640px) {
+          .site-footer-inner {
+            flex-direction: column;
+            gap: 22px;
+          }
+        }
+      `}</style>
+    </footer>
+  );
+}
+
+export function LegalStyles() {
+  return (
+    <style>{`
+      .legal-doc {
+        width: min(880px, 100%);
+        margin: 28px auto 0;
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 18px;
+        box-shadow: var(--shadow-soft);
+        padding: clamp(28px, 5vw, 56px);
+      }
+      .legal-head {
+        padding-bottom: 28px;
+        margin-bottom: 8px;
+        border-bottom: 1px solid var(--line);
+      }
+      .legal-eyebrow {
+        display: inline-block;
+        font-size: 13px;
+        font-weight: 700;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        color: var(--brand-dark);
+        background: var(--brand-soft);
+        padding: 6px 14px;
+        border-radius: 999px;
+        margin-bottom: 18px;
+      }
+      .legal-head h1 {
+        margin: 0 0 10px;
+        font-size: clamp(26px, 4vw, 34px);
+        line-height: 1.2;
+        letter-spacing: -0.01em;
+        color: var(--ink);
+      }
+      .legal-meta {
+        margin: 0;
+        color: var(--muted);
+        font-size: 14px;
+        font-weight: 500;
+      }
+      .legal-body {
+        display: flex;
+        flex-direction: column;
+        gap: 34px;
+        padding-top: 32px;
+      }
+      .legal-article {
+        scroll-margin-top: 90px;
+      }
+      .legal-article-title {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: baseline;
+        gap: 12px;
+        margin: 0 0 14px;
+        font-size: clamp(17px, 2.4vw, 20px);
+        line-height: 1.35;
+        color: var(--ink);
+      }
+      .legal-article-num {
+        font-size: 13px;
+        font-weight: 800;
+        letter-spacing: 0.04em;
+        color: #ffffff;
+        background: var(--brand);
+        padding: 5px 12px;
+        border-radius: 999px;
+        white-space: nowrap;
+        box-shadow: 0 6px 16px var(--brand-shadow);
+      }
+      .legal-article-body {
+        color: #34373c;
+        font-size: 15.5px;
+        line-height: 1.85;
+      }
+      .legal-article-body p {
+        margin: 0;
+      }
+      .legal-article-body strong {
+        color: var(--brand-dark);
+        font-weight: 700;
+      }
+      .legal-list {
+        margin: 0;
+        padding: 0;
+        list-style: none;
+        counter-reset: legal-counter;
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+      }
+      .legal-list > li {
+        counter-increment: legal-counter;
+        position: relative;
+        padding-left: 38px;
+      }
+      .legal-list > li::before {
+        content: counter(legal-counter);
+        position: absolute;
+        left: 0;
+        top: 1px;
+        width: 26px;
+        height: 26px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 13px;
+        font-weight: 800;
+        color: var(--brand-dark);
+        background: var(--brand-soft);
+        border-radius: 8px;
+      }
+      .legal-article-body a {
+        color: var(--brand-dark);
+        font-weight: 600;
+        text-decoration: underline;
+      }
+      .legal-contact {
+        margin-top: 36px;
+        padding: 22px 24px;
+        background: var(--brand-soft);
+        border-radius: 14px;
+        color: var(--brand-dark);
+        font-size: 15px;
+        line-height: 1.7;
+      }
+      .legal-contact strong {
+        display: block;
+        margin-bottom: 4px;
+        font-size: 15px;
+      }
+      .legal-contact a {
+        color: var(--brand-dark);
+        font-weight: 700;
+        text-decoration: underline;
+      }
+      @media (max-width: 640px) {
+        .legal-article-body {
+          font-size: 15px;
+          line-height: 1.8;
+        }
+      }
+    `}</style>
   );
 }
