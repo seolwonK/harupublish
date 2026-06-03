@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.haru.payment.domain.Payment;
 import com.haru.payment.domain.PaymentMethod;
 import com.haru.payment.infra.PaymentRepository;
+import com.haru.settings.application.PlatformSettingsService;
 import com.haru.tutor.domain.TutorProfile;
 import com.haru.tutor.infra.TutorProfileRepository;
 import com.haru.user.domain.Role;
@@ -49,6 +50,9 @@ class PaymentIntegrationTest {
         @Autowired
         TutorProfileRepository tutorProfileRepository;
 
+    @Autowired
+    PlatformSettingsService platformSettingsService;
+
     @Test
     void studentCanCreateCheckoutAndReadOwnPayments() throws Exception {
         String tutorToken = signupAndGetAccessToken("payment-tutor@example.com");
@@ -67,9 +71,11 @@ class PaymentIntegrationTest {
                 .andExpect(jsonPath("$.data.unitAmount").value(100.00))
                 .andExpect(jsonPath("$.data.subtotalAmount").value(100.00))
                 .andExpect(jsonPath("$.data.discountAmount").value(0.00))
-                .andExpect(jsonPath("$.data.studentFeeAmount").value(5.00))
-                .andExpect(jsonPath("$.data.totalAmount").value(105.00))
+                .andExpect(jsonPath("$.data.studentFeeAmount").value(10.00))
+                .andExpect(jsonPath("$.data.totalAmount").value(110.00))
                 .andExpect(jsonPath("$.data.currency").value("USD"))
+                .andExpect(jsonPath("$.data.displayCurrency").value("USD"))
+                .andExpect(jsonPath("$.data.appliedStudentFeeRate").value(0.10))
                 .andExpect(jsonPath("$.data.paymentMethod").value("LEMON_SQUEEZY"))
                 .andExpect(jsonPath("$.data.status").value("PAID"))
                 .andReturn()
@@ -90,11 +96,13 @@ class PaymentIntegrationTest {
     }
 
     @Test
-    void lessonPackDiscountsAndFiftyMinutePriceAreCalculated() throws Exception {
+    void lessonPackDiscountsUseModel1MarkupAndFiftyMinuteIsRejected() throws Exception {
         String tutorToken = signupAndGetAccessToken("payment-calculation-tutor@example.com");
         long tutorProfileId = createApprovedTutor(tutorToken);
         String studentToken = signupAndGetAccessToken("payment-calculation-student@example.com");
 
+        // 5-pack @100: subtotal=500, discount=500*0.05=25, discounted=475,
+        // studentFee=475*0.10=47.50, total=522.50
         mockMvc.perform(post("/api/payments/checkout")
                         .header("Authorization", auth(studentToken))
                         .contentType(MediaType.APPLICATION_JSON)
@@ -102,9 +110,11 @@ class PaymentIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.subtotalAmount").value(500.00))
                 .andExpect(jsonPath("$.data.discountAmount").value(25.00))
-                .andExpect(jsonPath("$.data.studentFeeAmount").value(23.75))
-                .andExpect(jsonPath("$.data.totalAmount").value(498.75));
+                .andExpect(jsonPath("$.data.studentFeeAmount").value(47.50))
+                .andExpect(jsonPath("$.data.totalAmount").value(522.50));
 
+        // 10-pack @100: subtotal=1000, discount=1000*0.10=100, discounted=900,
+        // studentFee=900*0.10=90, total=990
         mockMvc.perform(post("/api/payments/checkout")
                         .header("Authorization", auth(studentToken))
                         .contentType(MediaType.APPLICATION_JSON)
@@ -112,16 +122,16 @@ class PaymentIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.subtotalAmount").value(1000.00))
                 .andExpect(jsonPath("$.data.discountAmount").value(100.00))
-                .andExpect(jsonPath("$.data.studentFeeAmount").value(45.00))
-                .andExpect(jsonPath("$.data.totalAmount").value(945.00));
+                .andExpect(jsonPath("$.data.studentFeeAmount").value(90.00))
+                .andExpect(jsonPath("$.data.totalAmount").value(990.00));
 
+        // Decision A (MVP): 50-minute lessons cannot be purchased yet.
         mockMvc.perform(post("/api/payments/checkout")
                         .header("Authorization", auth(studentToken))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(checkoutJson(tutorProfileId, 50, 1, "LEMON_SQUEEZY")))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.unitAmount").value(180.00))
-                .andExpect(jsonPath("$.data.totalAmount").value(189.00));
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error.code").value("INVALID_REQUEST"));
     }
 
     @Test
@@ -332,7 +342,8 @@ class PaymentIntegrationTest {
                                 25,
                                 1,
                                 tutorProfile.getLessonPrice25Amount(),
-                        PaymentMethod.LEMON_SQUEEZY
+                        PaymentMethod.LEMON_SQUEEZY,
+                        platformSettingsService.currentFeePolicy()
                 );
                 return paymentRepository.save(payment).getId();
         }

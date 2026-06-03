@@ -1,0 +1,61 @@
+CREATE TABLE platform_settings (
+    id BIGINT NOT NULL AUTO_INCREMENT,
+    setting_version INT NOT NULL,
+    is_active BOOLEAN NOT NULL,
+    student_fee_rate DECIMAL(6,4) NOT NULL,
+    platform_fee_rate DECIMAL(6,4) NOT NULL,
+    withdrawal_fee_rate_paypal DECIMAL(6,4) NOT NULL,
+    withdrawal_fee_rate_bank DECIMAL(6,4) NOT NULL,
+    five_pack_discount_rate DECIMAL(6,4) NOT NULL,
+    ten_pack_discount_rate DECIMAL(6,4) NOT NULL,
+    cancel_window_hours INT NOT NULL,
+    credit_expiry_months INT NOT NULL,
+    promo_fee_waiver_enabled BOOLEAN NOT NULL,
+    promo_fee_waiver_until DATE,
+    promo_max_waived_tutors INT NOT NULL,
+    promo_withdrawal_fee_rate DECIMAL(6,4) NOT NULL,
+    base_currency VARCHAR(3) NOT NULL,
+    updated_by_admin_id BIGINT,
+    created_at TIMESTAMP(6) NOT NULL,
+    PRIMARY KEY (id)
+);
+
+CREATE INDEX idx_platform_settings_active ON platform_settings (is_active, setting_version);
+
+INSERT INTO platform_settings (
+    setting_version,
+    is_active,
+    student_fee_rate,
+    platform_fee_rate,
+    withdrawal_fee_rate_paypal,
+    withdrawal_fee_rate_bank,
+    five_pack_discount_rate,
+    ten_pack_discount_rate,
+    cancel_window_hours,
+    credit_expiry_months,
+    promo_fee_waiver_enabled,
+    promo_fee_waiver_until,
+    promo_max_waived_tutors,
+    promo_withdrawal_fee_rate,
+    base_currency,
+    updated_by_admin_id,
+    created_at
+) VALUES (
+    1,
+    TRUE,
+    0.1000,
+    0.1500,
+    0.0300,
+    0.0500,
+    0.0500,
+    0.1000,
+    3,
+    12,
+    TRUE,
+    DATE '2026-12-31',
+    10,
+    0.0500,
+    'USD',
+    NULL,
+    CURRENT_TIMESTAMP(6)
+);

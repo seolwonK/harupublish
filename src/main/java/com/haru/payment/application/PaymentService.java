@@ -16,6 +16,8 @@ import com.haru.payment.infra.LemonSqueezyClient;
 import com.haru.payment.infra.LemonSqueezyClient.LemonSqueezyOrder;
 import com.haru.payment.infra.LemonSqueezyProperties;
 import com.haru.payment.infra.PaymentRepository;
+import com.haru.settings.application.PlatformSettingsService;
+import com.haru.settings.domain.FeePolicy;
 import com.haru.tutor.domain.TutorProfile;
 import com.haru.tutor.domain.TutorProfileStatus;
 import com.haru.tutor.infra.TutorProfileRepository;
@@ -42,6 +44,7 @@ public class PaymentService {
     private final UserAccountRepository userAccountRepository;
     private final TutorProfileRepository tutorProfileRepository;
     private final PaymentRepository paymentRepository;
+    private final PlatformSettingsService platformSettingsService;
     private final LemonSqueezyClient lemonSqueezyClient;
     private final LemonSqueezyProperties lemonSqueezyProperties;
     private final ObjectMapper objectMapper;
@@ -51,6 +54,7 @@ public class PaymentService {
             UserAccountRepository userAccountRepository,
             TutorProfileRepository tutorProfileRepository,
             PaymentRepository paymentRepository,
+            PlatformSettingsService platformSettingsService,
             LemonSqueezyClient lemonSqueezyClient,
             LemonSqueezyProperties lemonSqueezyProperties,
             ObjectMapper objectMapper,
@@ -59,6 +63,7 @@ public class PaymentService {
         this.userAccountRepository = userAccountRepository;
         this.tutorProfileRepository = tutorProfileRepository;
         this.paymentRepository = paymentRepository;
+        this.platformSettingsService = platformSettingsService;
         this.lemonSqueezyClient = lemonSqueezyClient;
         this.lemonSqueezyProperties = lemonSqueezyProperties;
         this.objectMapper = objectMapper;
@@ -80,13 +85,15 @@ public class PaymentService {
             throw new BusinessException(ErrorCode.INVALID_REQUEST, "Tutors cannot buy their own lesson packs.");
         }
 
+        FeePolicy feePolicy = platformSettingsService.currentFeePolicy();
         Payment payment = paymentRepository.save(Payment.checkout(
                 student,
                 tutorProfile,
                 request.lessonDurationMinutes(),
                 request.lessonPackCount(),
                 unitAmount(tutorProfile, request.lessonDurationMinutes()),
-                PaymentMethod.LEMON_SQUEEZY
+                PaymentMethod.LEMON_SQUEEZY,
+                feePolicy
         ));
 
         if (lemonSqueezyClient.isEnabled()) {

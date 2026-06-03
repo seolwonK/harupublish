@@ -18,6 +18,7 @@ import jakarta.persistence.ManyToOne;
 import jakarta.persistence.OneToOne;
 import jakarta.persistence.Table;
 
+import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.Instant;
 
@@ -56,6 +57,19 @@ public class Booking {
     @Column(nullable = false, length = 20)
     private BookingStatus status;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "completion_state", length = 30)
+    private BookingCompletionState completionState;
+
+    @Column(name = "settled", nullable = false)
+    private boolean settled;
+
+    @Column(name = "settled_at")
+    private Instant settledAt;
+
+    @Column(name = "earning_amount_usd", precision = 12, scale = 2)
+    private BigDecimal earningAmountUsd;
+
     @Column(name = "cancel_reason", length = 500)
     private String cancelReason;
 
@@ -85,6 +99,7 @@ public class Booking {
         this.startAt = scheduleSlot.getStartAt();
         this.endAt = scheduleSlot.getStartAt().plus(Duration.ofMinutes(lessonDurationMinutes));
         this.status = BookingStatus.RESERVED;
+        this.settled = false;
         this.createdAt = Instant.now();
         this.updatedAt = this.createdAt;
     }
@@ -96,16 +111,78 @@ public class Booking {
         return new Booking(student, tutorProfile, scheduleSlot, lessonDurationMinutes);
     }
 
-    public void cancel(String reason, Instant now) {
+    /**
+     * Cancel a booking. The cancel window (hours before start) comes from the
+     * runtime {@link com.haru.settings.domain.FeePolicy} rather than a hard-coded
+     * 3 hours. Instead of rejecting late cancels, we now branch:
+     *
+     * <ul>
+     *   <li><b>now &le; startAt - window</b> = normal cancel: status CANCELLED,
+     *       completion state CANCELLED_NORMAL, unused credit is refundable
+     *       (credit issuance is the credit track's job).</li>
+     *   <li><b>now &gt; startAt - window</b> = late cancel: status CANCELLED but
+     *       completion state CANCELLED_LATE, credit consumed, student refunded 0,
+     *       and 100% of the lesson price accrues to the tutor.</li>
+     * </ul>
+     *
+     * @return true when this was a late cancel (lesson consumed / tutor earns).
+     */
+    public boolean cancel(String reason, int cancelWindowHours, Instant now) {
         if (status != BookingStatus.RESERVED) {
             throw new BusinessException(ErrorCode.INVALID_REQUEST, "Only reserved bookings can be cancelled.");
         }
-        if (now.isAfter(startAt.minus(Duration.ofHours(3)))) {
-            throw new BusinessException(ErrorCode.INVALID_REQUEST, "Booking can be cancelled until 3 hours before lesson start.");
-        }
+        boolean lateCancel = now.isAfter(cancelDeadline(cancelWindowHours));
         this.status = BookingStatus.CANCELLED;
+        this.completionState = lateCancel
+                ? BookingCompletionState.CANCELLED_LATE
+                : BookingCompletionState.CANCELLED_NORMAL;
         this.cancelReason = reason;
         touch(now);
+        return lateCancel;
+    }
+
+    public Instant cancelDeadline(int cancelWindowHours) {
+        return startAt.minus(Duration.ofHours(cancelWindowHours));
+    }
+
+    /**
+     * Persist the completion outcome for a reserved booking whose end time has
+     * passed. Idempotent at the call site via the {@code settled} flag.
+     */
+    public void markCompleted(Instant now) {
+        if (status == BookingStatus.RESERVED) {
+            this.status = BookingStatus.COMPLETED;
+        }
+        if (this.completionState == null) {
+            this.completionState = BookingCompletionState.COMPLETED;
+        }
+        touch(now);
+    }
+
+    public void markNoShow(Instant now) {
+        if (status == BookingStatus.RESERVED) {
+            this.status = BookingStatus.NO_SHOW;
+        }
+        if (this.completionState == null) {
+            this.completionState = BookingCompletionState.NO_SHOW;
+        }
+        touch(now);
+    }
+
+    /**
+     * Stamp settlement bookkeeping once the earning has been written to the
+     * tutor ledger. Only the {@code settled = false} guard at the call site
+     * keeps this idempotent.
+     */
+    public void markSettled(BigDecimal earningAmountUsd, Instant now) {
+        this.settled = true;
+        this.settledAt = now;
+        this.earningAmountUsd = earningAmountUsd;
+        touch(now);
+    }
+
+    public boolean tutorEarns() {
+        return completionState != null && completionState.tutorEarns();
     }
 
     public void assignJitsiRoom(String provider, String roomName, Instant now) {
@@ -161,6 +238,22 @@ public class Booking {
 
     public BookingStatus getStatus() {
         return status;
+    }
+
+    public BookingCompletionState getCompletionState() {
+        return completionState;
+    }
+
+    public boolean isSettled() {
+        return settled;
+    }
+
+    public Instant getSettledAt() {
+        return settledAt;
+    }
+
+    public BigDecimal getEarningAmountUsd() {
+        return earningAmountUsd;
     }
 
     public String getCancelReason() {

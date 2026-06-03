@@ -67,6 +67,7 @@ public class SecurityConfig {
                                 "/v3/api-docs/**"
                         ).permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/payments/webhooks/lemonsqueezy", "/api/payments/webhooks/lemon-squeezy").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/exchange-rates/latest").permitAll()
                         .requestMatchers("/api/tutors/me/**").authenticated()
                         .requestMatchers(HttpMethod.GET, "/api/tutors", "/api/tutors/*", "/api/tutors/*/schedule", "/api/tutors/*/reviews").permitAll()
                         .requestMatchers("/api/auth/signup", "/api/auth/login", "/api/auth/refresh").permitAll()

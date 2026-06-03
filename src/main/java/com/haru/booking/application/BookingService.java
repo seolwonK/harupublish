@@ -18,6 +18,10 @@ import com.haru.payment.domain.PaymentStatus;
 import com.haru.payment.infra.PaymentRepository;
 import com.haru.schedule.domain.TutorScheduleSlot;
 import com.haru.schedule.infra.TutorScheduleSlotRepository;
+import com.haru.settings.application.PlatformSettingsService;
+import com.haru.settings.domain.FeePolicy;
+import com.haru.settlement.application.SettlementService;
+import com.haru.settlement.domain.EarningEntryType;
 import com.haru.tutor.domain.TutorProfile;
 import com.haru.tutor.domain.TutorProfileStatus;
 import com.haru.tutor.infra.TutorProfileRepository;
@@ -41,6 +45,8 @@ public class BookingService {
     private final PaymentRepository paymentRepository;
     private final JitsiRoomNameGenerator jitsiRoomNameGenerator;
     private final JitsiTokenService jitsiTokenService;
+    private final PlatformSettingsService platformSettingsService;
+    private final SettlementService settlementService;
     private static final String ALREADY_BOOKED_MESSAGE = "Schedule slot is already booked.";
 
     public BookingService(
@@ -50,7 +56,9 @@ public class BookingService {
             BookingRepository bookingRepository,
             PaymentRepository paymentRepository,
             JitsiRoomNameGenerator jitsiRoomNameGenerator,
-            JitsiTokenService jitsiTokenService
+            JitsiTokenService jitsiTokenService,
+            PlatformSettingsService platformSettingsService,
+            SettlementService settlementService
     ) {
         this.userAccountRepository = userAccountRepository;
         this.tutorProfileRepository = tutorProfileRepository;
@@ -59,6 +67,8 @@ public class BookingService {
         this.paymentRepository = paymentRepository;
         this.jitsiRoomNameGenerator = jitsiRoomNameGenerator;
         this.jitsiTokenService = jitsiTokenService;
+        this.platformSettingsService = platformSettingsService;
+        this.settlementService = settlementService;
     }
 
     @Transactional
@@ -117,8 +127,19 @@ public class BookingService {
     @Transactional
     public BookingResponse cancel(Long userId, Long bookingId, CancelBookingRequest request) {
         Booking booking = getBookingWithAccess(userId, bookingId);
-        booking.cancel(request == null ? null : request.reason(), Instant.now());
-        return BookingResponse.from(booking, Instant.now());
+        FeePolicy feePolicy = platformSettingsService.currentFeePolicy();
+        Instant now = Instant.now();
+        boolean lateCancel = booking.cancel(
+                request == null ? null : request.reason(),
+                feePolicy.cancelWindowHours(),
+                now
+        );
+        if (lateCancel) {
+            // Late cancel = lesson consumed, student refunded 0, 100% accrues to
+            // the tutor. Credit the earning immediately as cyber money.
+            settlementService.settleEarnedBooking(booking, EarningEntryType.NO_SHOW_EARNED, now);
+        }
+        return BookingResponse.from(booking, now);
     }
 
     @Transactional(readOnly = true)
@@ -162,11 +183,10 @@ public class BookingService {
                 lessonDurationMinutes,
                 PaymentStatus.PAID
         ));
-        long consumedLessons = bookingRepository.countByStudentIdAndTutorProfileIdAndLessonDurationMinutesAndStatusNot(
+        long consumedLessons = bookingRepository.countConsumedLessons(
                 studentUserId,
                 tutorProfileId,
-                lessonDurationMinutes,
-                BookingStatus.CANCELLED
+                lessonDurationMinutes
         );
 
         if (paidLessons <= consumedLessons) {

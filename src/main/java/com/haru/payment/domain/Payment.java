@@ -2,6 +2,7 @@ package com.haru.payment.domain;
 
 import com.haru.common.exception.BusinessException;
 import com.haru.common.exception.ErrorCode;
+import com.haru.settings.domain.FeePolicy;
 import com.haru.tutor.domain.TutorProfile;
 import com.haru.user.domain.UserAccount;
 import jakarta.persistence.Column;
@@ -27,10 +28,6 @@ public class Payment {
     public static final String V1_CURRENCY = "USD";
     public static final int LESSON_DURATION_25 = 25;
     public static final int LESSON_DURATION_50 = 50;
-
-    private static final BigDecimal FIVE_PACK_DISCOUNT_RATE = new BigDecimal("0.05");
-    private static final BigDecimal TEN_PACK_DISCOUNT_RATE = new BigDecimal("0.10");
-    private static final BigDecimal STUDENT_FEE_RATE = new BigDecimal("0.05");
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -94,6 +91,36 @@ public class Payment {
     @Column(name = "provider_order_identifier", length = 120)
     private String providerOrderIdentifier;
 
+    @Column(name = "applied_student_fee_rate", precision = 6, scale = 4)
+    private BigDecimal appliedStudentFeeRate;
+
+    @Column(name = "applied_five_pack_discount_rate", precision = 6, scale = 4)
+    private BigDecimal appliedFivePackDiscountRate;
+
+    @Column(name = "applied_ten_pack_discount_rate", precision = 6, scale = 4)
+    private BigDecimal appliedTenPackDiscountRate;
+
+    @Column(name = "settings_version")
+    private Integer settingsVersion;
+
+    @Column(name = "display_currency", length = 3)
+    private String displayCurrency;
+
+    @Column(name = "fx_rate_used", precision = 18, scale = 8)
+    private BigDecimal fxRateUsed;
+
+    @Column(name = "fx_rate_source", length = 40)
+    private String fxRateSource;
+
+    @Column(name = "fx_captured_at")
+    private Instant fxCapturedAt;
+
+    @Column(name = "refund_credit_amount_usd", precision = 10, scale = 2)
+    private BigDecimal refundCreditAmountUsd;
+
+    @Column(name = "refund_approved_at")
+    private Instant refundApprovedAt;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
@@ -109,7 +136,8 @@ public class Payment {
             int lessonDurationMinutes,
             int lessonPackCount,
             BigDecimal unitAmount,
-            PaymentMethod paymentMethod
+            PaymentMethod paymentMethod,
+            FeePolicy feePolicy
     ) {
         validateLessonDuration(lessonDurationMinutes);
         validateLessonPackCount(lessonPackCount);
@@ -117,18 +145,35 @@ public class Payment {
         if (paymentMethod == null) {
             throw new BusinessException(ErrorCode.INVALID_REQUEST, "Payment method is required.");
         }
+        if (feePolicy == null) {
+            throw new BusinessException(ErrorCode.INVALID_REQUEST, "Fee policy is required for checkout.");
+        }
 
         this.student = student;
         this.tutorProfile = tutorProfile;
         this.lessonDurationMinutes = lessonDurationMinutes;
         this.lessonPackCount = lessonPackCount;
+
+        // Model 1 (markup) pricing — every multiply is rounded with money() HALF_UP at scale 2.
+        BigDecimal discountRate = feePolicy.discountRate(lessonPackCount);
         this.unitAmount = money(unitAmount);
         this.subtotalAmount = money(this.unitAmount.multiply(BigDecimal.valueOf(lessonPackCount)));
-        this.discountAmount = money(this.subtotalAmount.multiply(discountRate(lessonPackCount)));
+        this.discountAmount = money(this.subtotalAmount.multiply(discountRate));
+        // discounted = tutor gross (pack discount is shared with the tutor).
         BigDecimal discountedAmount = this.subtotalAmount.subtract(this.discountAmount);
-        this.studentFeeAmount = money(discountedAmount.multiply(STUDENT_FEE_RATE));
+        // studentFee = platform student markup on the discounted tutor gross.
+        this.studentFeeAmount = money(discountedAmount.multiply(feePolicy.studentFeeRate()));
+        // total = single student-facing price ("10% included").
         this.totalAmount = money(discountedAmount.add(this.studentFeeAmount));
+
+        // Snapshot the rates/version that were in effect (no retroactive repricing).
+        this.appliedStudentFeeRate = feePolicy.studentFeeRate();
+        this.appliedFivePackDiscountRate = feePolicy.fivePackDiscountRate();
+        this.appliedTenPackDiscountRate = feePolicy.tenPackDiscountRate();
+        this.settingsVersion = feePolicy.settingVersion();
+
         this.currency = V1_CURRENCY;
+        this.displayCurrency = V1_CURRENCY;
         this.paymentMethod = paymentMethod;
         this.status = PaymentStatus.PENDING;
         this.createdAt = Instant.now();
@@ -141,9 +186,10 @@ public class Payment {
             int lessonDurationMinutes,
             int lessonPackCount,
             BigDecimal unitAmount,
-            PaymentMethod paymentMethod
+            PaymentMethod paymentMethod,
+            FeePolicy feePolicy
     ) {
-        return new Payment(student, tutorProfile, lessonDurationMinutes, lessonPackCount, unitAmount, paymentMethod);
+        return new Payment(student, tutorProfile, lessonDurationMinutes, lessonPackCount, unitAmount, paymentMethod, feePolicy);
     }
 
     public void requestRefund(String reason) {
@@ -181,14 +227,31 @@ public class Payment {
         touch();
     }
 
+    /**
+     * Admin approval of a refund issued as Haru credit (no cash-out). Records the
+     * credited USD amount and moves the payment to REFUNDED so it cannot be
+     * approved again, which (together with the provider path) blocks double refunds.
+     */
+    public void approveRefundAsCredit(BigDecimal creditAmountUsd, Instant now) {
+        if (status == PaymentStatus.REFUNDED) {
+            throw new BusinessException(ErrorCode.INVALID_REQUEST, "Payment was already refunded.");
+        }
+        this.refundCreditAmountUsd = creditAmountUsd;
+        this.refundApprovedAt = now;
+        this.status = PaymentStatus.REFUNDED;
+        touch();
+    }
+
     public void markFailed() {
         this.status = PaymentStatus.FAILED;
         touch();
     }
 
     private static void validateLessonDuration(int lessonDurationMinutes) {
-        if (lessonDurationMinutes != LESSON_DURATION_25 && lessonDurationMinutes != LESSON_DURATION_50) {
-            throw new BusinessException(ErrorCode.INVALID_REQUEST, "lessonDurationMinutes must be 25 or 50.");
+        // Decision A (MVP): only 25-minute lessons are purchasable. 50-minute
+        // pricing/booking ships in a later round.
+        if (lessonDurationMinutes != LESSON_DURATION_25) {
+            throw new BusinessException(ErrorCode.INVALID_REQUEST, "Only 25-minute lessons can be purchased right now.");
         }
     }
 
@@ -202,16 +265,6 @@ public class Payment {
         if (unitAmount == null || unitAmount.signum() <= 0) {
             throw new BusinessException(ErrorCode.INVALID_REQUEST, "Lesson price must be greater than zero.");
         }
-    }
-
-    private static BigDecimal discountRate(int lessonPackCount) {
-        if (lessonPackCount == 5) {
-            return FIVE_PACK_DISCOUNT_RATE;
-        }
-        if (lessonPackCount == 10) {
-            return TEN_PACK_DISCOUNT_RATE;
-        }
-        return BigDecimal.ZERO;
     }
 
     private static BigDecimal money(BigDecimal amount) {
@@ -262,6 +315,24 @@ public class Payment {
         return totalAmount;
     }
 
+    /**
+     * Tutor gross for the whole pack = subtotal - discount (the pack discount is
+     * shared with the tutor). The student fee is on top of this, not part of it.
+     */
+    public BigDecimal getDiscountedAmount() {
+        return subtotalAmount.subtract(discountAmount);
+    }
+
+    /**
+     * Per-lesson tutor gross in USD (discounted / packCount), rounded HALF_UP to
+     * 2 decimals. This is the gross a single completed/earned lesson contributes
+     * to settlement.
+     */
+    public BigDecimal perLessonDiscountedAmount() {
+        return getDiscountedAmount()
+                .divide(BigDecimal.valueOf(lessonPackCount), 2, RoundingMode.HALF_UP);
+    }
+
     public String getCurrency() {
         return currency;
     }
@@ -304,5 +375,45 @@ public class Payment {
 
     public Instant getUpdatedAt() {
         return updatedAt;
+    }
+
+    public BigDecimal getAppliedStudentFeeRate() {
+        return appliedStudentFeeRate;
+    }
+
+    public BigDecimal getAppliedFivePackDiscountRate() {
+        return appliedFivePackDiscountRate;
+    }
+
+    public BigDecimal getAppliedTenPackDiscountRate() {
+        return appliedTenPackDiscountRate;
+    }
+
+    public Integer getSettingsVersion() {
+        return settingsVersion;
+    }
+
+    public String getDisplayCurrency() {
+        return displayCurrency;
+    }
+
+    public BigDecimal getFxRateUsed() {
+        return fxRateUsed;
+    }
+
+    public String getFxRateSource() {
+        return fxRateSource;
+    }
+
+    public Instant getFxCapturedAt() {
+        return fxCapturedAt;
+    }
+
+    public BigDecimal getRefundCreditAmountUsd() {
+        return refundCreditAmountUsd;
+    }
+
+    public Instant getRefundApprovedAt() {
+        return refundApprovedAt;
     }
 }
