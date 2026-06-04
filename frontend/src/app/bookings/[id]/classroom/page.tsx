@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeft, ExternalLink, Loader2, Video } from "lucide-react";
+import { ArrowLeft, ExternalLink, Loader2, Presentation, Video } from "lucide-react";
 import { useParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { BookingJoinResponse, haruApi } from "../../../api";
@@ -9,6 +9,7 @@ import { ApiNotice, Button, SectionHeader } from "../../../components";
 
 type JitsiMeetApi = {
   dispose: () => void;
+  executeCommand: (command: string, ...args: unknown[]) => void;
 };
 
 type JitsiConstructorOptions = {
@@ -58,6 +59,7 @@ export default function ClassroomPage() {
   const [join, setJoin] = useState<BookingJoinResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [meetingReady, setMeetingReady] = useState(false);
 
   useEffect(() => {
     if (authLoading) {
@@ -105,7 +107,10 @@ export default function ClassroomPage() {
           width: "100%",
           height: "100%",
           configOverwrite: {
-            prejoinPageEnabled: true
+            prejoinPageEnabled: true,
+            whiteboard: {
+              enabled: true
+            }
           },
           interfaceConfigOverwrite: {
             MOBILE_APP_PROMO: false
@@ -115,6 +120,7 @@ export default function ClassroomPage() {
           options.jwt = jwt;
         }
         apiRef.current = new window.JitsiMeetExternalAPI(domain, options);
+        setMeetingReady(true);
       })
       .catch((err: Error) => setError(err.message));
 
@@ -122,6 +128,7 @@ export default function ClassroomPage() {
       cancelled = true;
       apiRef.current?.dispose();
       apiRef.current = null;
+      setMeetingReady(false);
     };
   }, [join]);
 
@@ -132,6 +139,11 @@ export default function ClassroomPage() {
           <ArrowLeft size={16} /> Back
         </Button>
         <SectionHeader eyebrow="Jitsi Meet" title="Classroom" description="Join opens 10 minutes before the lesson starts." />
+        {meetingReady ? (
+          <Button variant="ghost" onClick={() => apiRef.current?.executeCommand("toggleWhiteboard")}>
+            <Presentation size={16} /> Whiteboard
+          </Button>
+        ) : null}
         {join?.joinUrl ? (
           <Button as="a" href={join.joinUrl} variant="ghost">
             <ExternalLink size={16} /> Open
