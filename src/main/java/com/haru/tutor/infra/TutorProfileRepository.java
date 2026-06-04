@@ -26,4 +26,7 @@ public interface TutorProfileRepository extends JpaRepository<TutorProfile, Long
 
     @EntityGraph(attributePaths = {"user", "user.roles"})
     Optional<TutorProfile> findByIdAndStatusAndHiddenFalse(Long id, TutorProfileStatus status);
+
+    @EntityGraph(attributePaths = {"user"})
+    List<TutorProfile> findAllByUserIdIn(java.util.Collection<Long> userIds);
 }

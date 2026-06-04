@@ -8,6 +8,7 @@ import com.haru.booking.api.dto.CreateBookingRequest;
 import com.haru.booking.domain.Booking;
 import com.haru.booking.domain.BookingStatus;
 import com.haru.booking.infra.BookingRepository;
+import com.haru.chat.application.ChatNotificationService;
 import com.haru.common.exception.BusinessException;
 import com.haru.common.exception.ErrorCode;
 import com.haru.common.exception.ForbiddenException;
@@ -47,6 +48,7 @@ public class BookingService {
     private final JitsiTokenService jitsiTokenService;
     private final PlatformSettingsService platformSettingsService;
     private final SettlementService settlementService;
+    private final ChatNotificationService chatNotificationService;
     private static final String ALREADY_BOOKED_MESSAGE = "Schedule slot is already booked.";
 
     public BookingService(
@@ -58,7 +60,8 @@ public class BookingService {
             JitsiRoomNameGenerator jitsiRoomNameGenerator,
             JitsiTokenService jitsiTokenService,
             PlatformSettingsService platformSettingsService,
-            SettlementService settlementService
+            SettlementService settlementService,
+            ChatNotificationService chatNotificationService
     ) {
         this.userAccountRepository = userAccountRepository;
         this.tutorProfileRepository = tutorProfileRepository;
@@ -69,6 +72,7 @@ public class BookingService {
         this.jitsiTokenService = jitsiTokenService;
         this.platformSettingsService = platformSettingsService;
         this.settlementService = settlementService;
+        this.chatNotificationService = chatNotificationService;
     }
 
     @Transactional
@@ -105,6 +109,7 @@ public class BookingService {
                 jitsiRoomNameGenerator.createRoomName(booking.getId()),
                 Instant.now()
         );
+        chatNotificationService.notifyBookingConfirmed(booking);
         return BookingResponse.from(booking, Instant.now());
     }
 
@@ -139,6 +144,7 @@ public class BookingService {
             // the tutor. Credit the earning immediately as cyber money.
             settlementService.settleEarnedBooking(booking, EarningEntryType.NO_SHOW_EARNED, now);
         }
+        chatNotificationService.notifyBookingCancelled(booking);
         return BookingResponse.from(booking, now);
     }
 
