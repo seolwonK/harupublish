@@ -359,8 +359,58 @@ export type SessionTokens = {
   refreshToken: string;
 };
 
+// ── 채팅 ──
+
+export type ChatRoomType = "DIRECT" | "SYSTEM_NOTICE" | "OPS";
+export type ChatMessageType = "TEXT" | "IMAGE" | "FILE" | "SYSTEM";
+
+export type ChatRoomSummary = {
+  id: number;
+  roomType: ChatRoomType;
+  counterpartUserId: number | null;
+  counterpartName: string;
+  counterpartImageUrl: string | null;
+  lastMessagePreview: string | null;
+  lastMessageAt: string | null;
+  unreadCount: number;
+};
+
+export type ChatRoomListResponse = {
+  rooms: ChatRoomSummary[];
+};
+
+export type ChatMessageResponse = {
+  id: number;
+  chatRoomId: number;
+  senderUserId: number | null;
+  senderName: string;
+  messageType: ChatMessageType;
+  body: string | null;
+  attachmentUrl: string | null;
+  attachmentName: string | null;
+  attachmentContentType: string | null;
+  attachmentSize: number | null;
+  createdAt: string;
+};
+
+export type ChatMessageListResponse = {
+  messages: ChatMessageResponse[];
+  hasMore: boolean;
+};
+
+/** STOMP 토픽으로 수신하는 이벤트 envelope. */
+export type ChatSocketEvent = {
+  type: "MESSAGE" | "READ" | "UNREAD";
+  chatRoomId: number;
+  message?: ChatMessageResponse;
+  userId?: number;
+  lastReadMessageId?: number;
+};
+
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8080";
 const API_ORIGIN = new URL(API_BASE_URL).origin;
+/** STOMP WebSocket 엔드포인트 (백엔드 /ws-chat). */
+export const CHAT_WS_URL = `${API_ORIGIN.replace(/^http/, "ws")}/ws-chat`;
 const REQUEST_TIMEOUT_MS = 8000;
 const PUBLIC_CACHE_TTL_MS = 60_000;
 
@@ -692,6 +742,34 @@ export const haruApi = {
   // ── 관리자: 환불 승인 -> Haru Credits 발급 ──
   approveRefund(token: string, paymentId: number) {
     return apiRequest<PaymentResponse>(`/api/admin/payments/${paymentId}/refund-approve`, { method: "POST", token });
+  },
+
+  // ── 채팅 ──
+  startChat(token: string, tutorProfileId: number) {
+    return apiRequest<ChatRoomSummary>("/api/chats", { method: "POST", token, body: { tutorProfileId } });
+  },
+  listChats(token: string) {
+    return apiRequest<ChatRoomListResponse>("/api/chats", { token });
+  },
+  getChatMessages(token: string, chatRoomId: number, params?: { beforeId?: number; size?: number }) {
+    return apiRequest<ChatMessageListResponse>(`/api/chats/${chatRoomId}/messages`, {
+      token,
+      query: { beforeId: params?.beforeId, size: params?.size }
+    });
+  },
+  sendChatMessage(token: string, chatRoomId: number, body: string) {
+    return apiRequest<ChatMessageResponse>(`/api/chats/${chatRoomId}/messages`, { method: "POST", token, body: { body } });
+  },
+  markChatRead(token: string, chatRoomId: number, lastMessageId: number) {
+    return apiRequest<void>(`/api/chats/${chatRoomId}/read`, { method: "POST", token, body: { lastMessageId } });
+  },
+  uploadChatAttachment(token: string, chatRoomId: number, file: File) {
+    const formData = new FormData();
+    formData.append("file", file);
+    return apiUpload<ChatMessageResponse>(`/api/chats/${chatRoomId}/attachments`, token, formData);
+  },
+  getChatUnreadCount(token: string) {
+    return apiRequest<{ count: number }>("/api/chats/unread-count", { token });
   }
 };
 

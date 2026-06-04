@@ -12,6 +12,8 @@ type AuthContextValue = {
   signup: (body: { email: string; password: string; name: string; timeZone: string }) => Promise<void>;
   logout: () => Promise<void>;
   refreshMe: () => Promise<UserMeResponse | null>;
+  /** refresh token으로 access token을 재발급한다. 실패하면 null (세션 만료). */
+  refreshSession: () => Promise<string | null>;
   setAuthResult: (result: AuthTokenResponse) => void;
 };
 
@@ -104,6 +106,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     [setAuthResult]
   );
 
+  const refreshSession = useCallback(async () => {
+    if (!tokens?.refreshToken) return null;
+    try {
+      const result = await haruApi.refresh(tokens.refreshToken);
+      setAuthResult(result);
+      return result.accessToken;
+    } catch {
+      return null;
+    }
+  }, [setAuthResult, tokens]);
+
   const logout = useCallback(async () => {
     const refreshToken = tokens?.refreshToken;
     window.localStorage.removeItem(STORAGE_KEY);
@@ -124,9 +137,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       signup,
       logout,
       refreshMe,
+      refreshSession,
       setAuthResult
     }),
-    [loading, login, logout, refreshMe, setAuthResult, signup, tokens, user]
+    [loading, login, logout, refreshMe, refreshSession, setAuthResult, signup, tokens, user]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

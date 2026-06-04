@@ -2351,9 +2351,10 @@ th {
 
 .chat-layout {
   display: grid;
-  grid-template-columns: 340px minmax(0, 1fr);
+  grid-template-columns: clamp(260px, 26%, 320px) minmax(0, 1fr);
   width: min(1180px, calc(100vw - 32px));
-  min-height: calc(100vh - 56px);
+  height: calc(100vh - 56px - 56px);
+  min-height: 480px;
   margin: 28px auto;
   overflow: hidden;
   border: 1px solid var(--line);
@@ -2363,14 +2364,19 @@ th {
 }
 
 .chat-list {
-  display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
-  align-content: start;
+  display: flex;
+  flex-direction: column;
   gap: 12px;
   min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
   border-right: 1px solid var(--line);
   background: #fffdf8;
   padding: 18px;
+}
+
+.chat-list .conversation {
+  flex-shrink: 0;
 }
 
 .chat-list .search-box {
@@ -2512,7 +2518,6 @@ th {
 }
 
 .bubble.mine {
-  align-self: flex-end;
   border-color: rgba(var(--brand-rgb), 0.35);
   background: var(--brand);
   color: white;
@@ -2525,9 +2530,34 @@ th {
 }
 
 .bubble.other {
-  align-self: flex-start;
   background: white;
   border-bottom-left-radius: 6px;
+}
+
+/* 카톡식 좌우 정렬: 내 메시지는 우측, 상대는 좌측. 시간은 말풍선 옆에 붙는다. */
+.message-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+  max-width: 100%;
+}
+
+.message-row.mine {
+  align-self: flex-end;
+  flex-direction: row-reverse;
+}
+
+.message-row.other {
+  align-self: flex-start;
+}
+
+.message-time {
+  flex-shrink: 0;
+  padding-bottom: 3px;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1;
+  white-space: nowrap;
 }
 
 .chat-input {
@@ -2954,6 +2984,7 @@ th {
   .chat-layout {
     grid-template-columns: 1fr;
     width: min(100% - 28px, 1180px);
+    height: auto;
     min-height: auto;
     margin: 18px auto;
   }
@@ -2984,4 +3015,20 @@ th {
   .bubble {
     max-width: 86%;
   }
+}
+
+/* 네비게이션 채팅 미읽음 배지 */
+.nav-unread-badge {
+  display: inline-grid;
+  place-items: center;
+  min-width: 18px;
+  height: 18px;
+  margin-left: 6px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--brand);
+  color: white;
+  font-size: 10px;
+  font-weight: 700;
+  vertical-align: middle;
 }

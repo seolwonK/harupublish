@@ -25,7 +25,7 @@ import {
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { ExpertListResponse, Role } from "./api";
 import { haruApi, resolveAssetUrl, toMoney } from "./api";
 import { useAuth } from "./auth";
@@ -261,9 +261,42 @@ export function CurrencyToggle() {
   );
 }
 
+const CHAT_UNREAD_POLL_MS = 30_000;
+
+/** 네비게이션 배지용 전체 미읽음 채팅 수. 30초 간격으로 폴링한다. */
+function useChatUnreadCount() {
+  const { accessToken } = useAuth();
+  const [count, setCount] = useState(0);
+
+  useEffect(() => {
+    if (!accessToken) {
+      setCount(0);
+      return;
+    }
+    let cancelled = false;
+    const load = () => {
+      haruApi
+        .getChatUnreadCount(accessToken)
+        .then((response) => {
+          if (!cancelled) setCount(response.count);
+        })
+        .catch(() => undefined);
+    };
+    load();
+    const intervalId = setInterval(load, CHAT_UNREAD_POLL_MS);
+    return () => {
+      cancelled = true;
+      clearInterval(intervalId);
+    };
+  }, [accessToken]);
+
+  return count;
+}
+
 export function AppHeader() {
   const { user, logout } = useAuth();
   const pathname = usePathname();
+  const chatUnreadCount = useChatUnreadCount();
   const isAdmin = user?.roles.includes("ADMIN");
   const navItems = user?.activeRole === "TUTOR"
     ? [
@@ -298,6 +331,7 @@ export function AppHeader() {
         {navItems.map(([label, href]) => (
           <a className={isNavSelected(pathname, href) ? "selected" : ""} href={href} key={href} aria-current={isNavSelected(pathname, href) ? "page" : undefined}>
             {label}
+            {href === "/chat" && chatUnreadCount > 0 ? <b className="nav-unread-badge">{chatUnreadCount > 99 ? "99+" : chatUnreadCount}</b> : null}
           </a>
         ))}
       </nav>
