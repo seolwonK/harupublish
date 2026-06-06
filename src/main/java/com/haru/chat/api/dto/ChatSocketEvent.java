@@ -28,7 +28,8 @@ public record ChatSocketEvent(
         return new ChatSocketEvent("READ", chatRoomId, null, userId, lastReadMessageId);
     }
 
-    public static ChatSocketEvent unread(Long chatRoomId) {
-        return new ChatSocketEvent("UNREAD", chatRoomId, null, null, null);
+    /** Carries the message so receivers can update list previews without a refetch. */
+    public static ChatSocketEvent unread(ChatMessageResponse message) {
+        return new ChatSocketEvent("UNREAD", message.chatRoomId(), message, null, null);
     }
 }

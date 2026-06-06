@@ -84,17 +84,25 @@ public class ChatService {
             throw new BusinessException(ErrorCode.INVALID_REQUEST, "You cannot start a chat with yourself.");
         }
 
-        ChatRoom room = findOrCreateDirectRoom(requester, tutorUser);
-        return summarize(room, requesterId, List.of(requester, tutorUser));
+        String pairKey = ChatRoom.directPairKey(requester.getId(), tutorUser.getId());
+        ChatRoom room = chatRoomRepository.findByDirectPairKey(pairKey)
+                .orElseGet(() -> createRoom(
+                        ChatRoom.direct(requester.getId(), tutorUser.getId()),
+                        pairKey,
+                        List.of(requester.getId(), tutorUser.getId())
+                ));
+        return summarize(room, requesterId);
     }
 
     @Transactional
     public ChatRoomListResponse listMyRooms(Long userId) {
         UserAccount user = userAccountRepository.findWithRolesById(userId)
                 .orElseThrow(() -> new NotFoundException("User was not found."));
-        ensureSystemRooms(user);
 
         List<ChatRoomParticipant> memberships = participantRepository.findMembershipsForUser(userId);
+        if (ensureSystemRooms(user, memberships)) {
+            memberships = participantRepository.findMembershipsForUser(userId);
+        }
         Map<Long, List<ChatRoomParticipant>> participantsByRoom = participantRepository.findParticipantsOfUserRooms(userId).stream()
                 .collect(Collectors.groupingBy(participant -> participant.getChatRoom().getId()));
 
@@ -117,17 +125,20 @@ public class ChatService {
                 : messageRepository.findByIdIn(lastMessageIds).stream()
                         .collect(Collectors.toMap(ChatMessage::getId, Function.identity()));
 
+        // All per-room unread counts in a single grouped query (avoids N+1).
+        Map<Long, Long> unreadByRoom = messageRepository.countUnreadByRoomForUser(userId).stream()
+                .collect(Collectors.toMap(row -> (Long) row[0], row -> (Long) row[1]));
+
         List<ChatRoomSummary> summaries = new ArrayList<>();
         for (ChatRoomParticipant membership : memberships) {
             ChatRoom room = membership.getChatRoom();
-            List<ChatRoomParticipant> roomParticipants = participantsByRoom.getOrDefault(room.getId(), List.of());
-            UserAccount counterpart = roomParticipants.stream()
-                    .map(ChatRoomParticipant::getUser)
-                    .filter(participant -> !participant.getId().equals(userId))
+            ChatRoomParticipant counterpart = participantsByRoom.getOrDefault(room.getId(), List.of()).stream()
+                    .filter(participant -> !participant.getUser().getId().equals(userId))
                     .findFirst()
                     .orElse(null);
             ChatMessage lastMessage = room.getLastMessageId() == null ? null : lastMessagesById.get(room.getLastMessageId());
-            summaries.add(toSummary(room, membership, counterpart, tutorProfilesByUserId, lastMessage, userId));
+            long unread = unreadByRoom.getOrDefault(room.getId(), 0L);
+            summaries.add(toSummary(room, counterpart, tutorProfilesByUserId, lastMessage, userId, unread));
         }
         return new ChatRoomListResponse(summaries);
     }
@@ -207,10 +218,13 @@ public class ChatService {
 
     /**
      * Drop a system (bot) message into the user's "Haru 알림" room, creating the
-     * room on first use. Joins the caller's transaction so a rollback also
-     * discards the notice; the broadcast itself is deferred to after commit.
+     * room on first use. Runs in its OWN transaction (REQUIRES_NEW): callers
+     * invoke this after their business transaction commits (see
+     * {@link ChatNotificationService}), so a failure here — e.g. a concurrent
+     * first-time room creation racing on the unique pair key — can never poison
+     * or roll back the calling flow.
      */
-    @Transactional
+    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.REQUIRES_NEW)
     public void sendSystemNotice(Long userId, String body) {
         UserAccount user = userAccountRepository.findWithRolesById(userId).orElse(null);
         if (user == null || user.getRoles().contains(Role.ADMIN)) {
@@ -218,39 +232,31 @@ public class ChatService {
         }
         String key = "notice:" + user.getId();
         ChatRoom room = chatRoomRepository.findByDirectPairKey(key)
-                .orElseGet(() -> createRoom(ChatRoom.systemNotice(user.getId()), key, user));
+                .orElseGet(() -> createRoom(ChatRoom.systemNotice(user.getId()), key, List.of(user.getId())));
         ChatMessage message = messageRepository.saveAndFlush(ChatMessage.system(room, body));
         room.touch(message.getId(), Instant.now());
         chatBroadcaster.broadcastMessage(List.of(user.getId()), ChatMessageResponse.from(message));
     }
 
+    /** Total unread across all rooms — single query (backs the header badge poll). */
     @Transactional(readOnly = true)
     public long totalUnreadCount(Long userId) {
-        return participantRepository.findMembershipsForUser(userId).stream()
-                .filter(membership -> membership.getChatRoom().getLastMessageId() != null)
-                .mapToLong(membership -> countUnread(
-                        membership.getChatRoom().getId(),
-                        membership.getLastReadMessageId(),
-                        userId
-                ))
-                .sum();
-    }
-
-    private ChatRoom findOrCreateDirectRoom(UserAccount requester, UserAccount tutorUser) {
-        String pairKey = ChatRoom.directPairKey(requester.getId(), tutorUser.getId());
-        return chatRoomRepository.findByDirectPairKey(pairKey)
-                .orElseGet(() -> createRoom(ChatRoom.direct(requester.getId(), tutorUser.getId()), pairKey, requester, tutorUser));
+        return messageRepository.countTotalUnreadForUser(userId);
     }
 
     /**
-     * Persist a room and its participants; the unique pair key turns a concurrent
-     * double-create into a re-read of the winning row.
+     * Persist a room and its participants in the current transaction. The
+     * unique pair key turns a concurrent double-create into a constraint
+     * violation; the catch re-reads the winning row, which only helps when the
+     * insert happened in a separate transaction — within the same transaction
+     * MySQL marks it rollback-only. That is why system-notice callers run in
+     * their own REQUIRES_NEW transaction after the business commit.
      */
-    private ChatRoom createRoom(ChatRoom room, String pairKey, UserAccount... participants) {
+    private ChatRoom createRoom(ChatRoom room, String pairKey, List<Long> participantUserIds) {
         try {
             ChatRoom saved = chatRoomRepository.saveAndFlush(room);
-            for (UserAccount participant : participants) {
-                participantRepository.save(ChatRoomParticipant.of(saved, participant));
+            for (Long participantUserId : participantUserIds) {
+                participantRepository.save(ChatRoomParticipant.of(saved, userAccountRepository.getReferenceById(participantUserId)));
             }
             return saved;
         } catch (DataIntegrityViolationException exception) {
@@ -261,73 +267,93 @@ public class ChatService {
 
     /**
      * Every non-admin user gets a "Haru 알림" notice room and a "운영팀" room the
-     * first time they open their chat list.
+     * first time they open their chat list. Checked against the already-loaded
+     * memberships so the common case costs no extra queries.
+     *
+     * @return true when a room was created (caller should re-read memberships)
      */
-    private void ensureSystemRooms(UserAccount user) {
+    private boolean ensureSystemRooms(UserAccount user, List<ChatRoomParticipant> memberships) {
         if (user.getRoles().contains(Role.ADMIN)) {
-            return;
+            return false;
         }
-        if (chatRoomRepository.findByDirectPairKey("notice:" + user.getId()).isEmpty()) {
-            createRoom(ChatRoom.systemNotice(user.getId()), "notice:" + user.getId(), user);
+        boolean hasNotice = memberships.stream()
+                .anyMatch(membership -> membership.getChatRoom().getRoomType() == ChatRoomType.SYSTEM_NOTICE);
+        boolean hasOps = memberships.stream()
+                .anyMatch(membership -> membership.getChatRoom().getRoomType() == ChatRoomType.OPS
+                        && ("ops:" + user.getId()).equals(membership.getChatRoom().getDirectPairKey()));
+        if (hasNotice && hasOps) {
+            return false;
         }
-        if (chatRoomRepository.findByDirectPairKey("ops:" + user.getId()).isEmpty()) {
-            List<UserAccount> admins = userAccountRepository.findAllByRole(Role.ADMIN);
-            List<UserAccount> participants = new ArrayList<>();
-            participants.add(user);
-            participants.addAll(admins);
-            createRoom(ChatRoom.ops(user.getId()), "ops:" + user.getId(), participants.toArray(UserAccount[]::new));
+        if (!hasNotice) {
+            createRoom(ChatRoom.systemNotice(user.getId()), "notice:" + user.getId(), List.of(user.getId()));
         }
+        if (!hasOps) {
+            List<Long> participantIds = new ArrayList<>();
+            participantIds.add(user.getId());
+            userAccountRepository.findAllByRole(Role.ADMIN).forEach(admin -> participantIds.add(admin.getId()));
+            createRoom(ChatRoom.ops(user.getId()), "ops:" + user.getId(), participantIds);
+        }
+        return true;
     }
 
-    private ChatRoomSummary summarize(ChatRoom room, Long viewerId, List<UserAccount> participants) {
-        UserAccount counterpart = participants.stream()
-                .filter(participant -> !participant.getId().equals(viewerId))
+    /** Single-room summary (used right after a room is created/looked up). */
+    private ChatRoomSummary summarize(ChatRoom room, Long viewerId) {
+        List<ChatRoomParticipant> participants = participantRepository.findAllByChatRoomId(room.getId());
+        ChatRoomParticipant membership = participants.stream()
+                .filter(participant -> participant.getUser().getId().equals(viewerId))
+                .findFirst()
+                .orElseThrow(() -> new NotFoundException("Chat room membership was not found."));
+        ChatRoomParticipant counterpart = participants.stream()
+                .filter(participant -> !participant.getUser().getId().equals(viewerId))
                 .findFirst()
                 .orElse(null);
         Map<Long, TutorProfile> profiles = counterpart == null
                 ? Map.of()
-                : tutorProfileRepository.findAllByUserIdIn(Set.of(counterpart.getId())).stream()
+                : tutorProfileRepository.findAllByUserIdIn(Set.of(counterpart.getUser().getId())).stream()
                         .collect(Collectors.toMap(profile -> profile.getUser().getId(), Function.identity(), (a, b) -> a));
-        ChatRoomParticipant membership = participantRepository.findByChatRoomIdAndUserId(room.getId(), viewerId)
-                .orElseThrow(() -> new NotFoundException("Chat room membership was not found."));
         ChatMessage lastMessage = room.getLastMessageId() == null
                 ? null
                 : messageRepository.findById(room.getLastMessageId()).orElse(null);
-        return toSummary(room, membership, counterpart, profiles, lastMessage, viewerId);
+        long unread = messageRepository.countUnread(
+                room.getId(),
+                membership.getLastReadMessageId() == null ? 0L : membership.getLastReadMessageId(),
+                viewerId
+        );
+        return toSummary(room, counterpart, profiles, lastMessage, viewerId, unread);
     }
 
     private ChatRoomSummary toSummary(
             ChatRoom room,
-            ChatRoomParticipant membership,
-            UserAccount counterpart,
+            ChatRoomParticipant counterpart,
             Map<Long, TutorProfile> tutorProfilesByUserId,
             ChatMessage lastMessage,
-            Long viewerId
+            Long viewerId,
+            long unread
     ) {
+        UserAccount counterpartUser = counterpart == null ? null : counterpart.getUser();
         String name;
         String imageUrl = null;
-        Long counterpartUserId = counterpart == null ? null : counterpart.getId();
+        Long counterpartUserId = counterpartUser == null ? null : counterpartUser.getId();
 
         if (room.getRoomType() == ChatRoomType.SYSTEM_NOTICE) {
             name = SYSTEM_NOTICE_ROOM_NAME;
             counterpartUserId = null;
         } else if (room.getRoomType() == ChatRoomType.OPS && room.getDirectPairKey().equals("ops:" + viewerId)) {
             name = OPS_ROOM_NAME;
-        } else if (counterpart != null) {
-            TutorProfile profile = tutorProfilesByUserId.get(counterpart.getId());
+        } else if (counterpartUser != null) {
+            TutorProfile profile = tutorProfilesByUserId.get(counterpartUser.getId());
             if (profile != null && profile.getDisplayName() != null && !profile.getDisplayName().isBlank()) {
                 name = profile.getDisplayName();
                 imageUrl = profile.getThumbnailUrl() != null && !profile.getThumbnailUrl().isBlank()
                         ? profile.getThumbnailUrl()
                         : profile.getProfileImageUrl();
             } else {
-                name = counterpart.getName();
+                name = counterpartUser.getName();
             }
         } else {
             name = SYSTEM_NOTICE_ROOM_NAME;
         }
 
-        long unread = countUnread(room.getId(), membership.getLastReadMessageId(), viewerId);
         return new ChatRoomSummary(
                 room.getId(),
                 room.getRoomType(),
@@ -336,12 +362,9 @@ public class ChatService {
                 imageUrl,
                 preview(lastMessage),
                 lastMessage == null ? null : lastMessage.getCreatedAt(),
-                unread
+                unread,
+                counterpart == null ? null : counterpart.getLastReadMessageId()
         );
-    }
-
-    private long countUnread(Long roomId, Long lastReadMessageId, Long userId) {
-        return messageRepository.countUnread(roomId, lastReadMessageId == null ? 0L : lastReadMessageId, userId);
     }
 
     private String preview(ChatMessage message) {

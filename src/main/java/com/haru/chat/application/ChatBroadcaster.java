@@ -35,7 +35,7 @@ public class ChatBroadcaster {
                     messagingTemplate.convertAndSendToUser(
                             String.valueOf(userId),
                             WebSocketConfig.USER_UNREAD_QUEUE,
-                            ChatSocketEvent.unread(message.chatRoomId())
+                            ChatSocketEvent.unread(message)
                     );
                 }
             }

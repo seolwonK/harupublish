@@ -32,4 +32,27 @@ public interface ChatMessageRepository extends JpaRepository<ChatMessage, Long> 
               and (m.sender is null or m.sender.id <> :userId)
             """)
     long countUnread(@Param("roomId") Long roomId, @Param("lastReadId") Long lastReadId, @Param("userId") Long userId);
+
+    /** Per-room unread counts for every room the user participates in — one query. */
+    @Query("""
+            select p.chatRoom.id, count(m)
+            from ChatRoomParticipant p
+            join ChatMessage m on m.chatRoom.id = p.chatRoom.id
+            where p.user.id = :userId
+              and m.id > coalesce(p.lastReadMessageId, 0)
+              and (m.sender is null or m.sender.id <> :userId)
+            group by p.chatRoom.id
+            """)
+    List<Object[]> countUnreadByRoomForUser(@Param("userId") Long userId);
+
+    /** Total unread across all of the user's rooms — one query (header badge). */
+    @Query("""
+            select count(m)
+            from ChatRoomParticipant p
+            join ChatMessage m on m.chatRoom.id = p.chatRoom.id
+            where p.user.id = :userId
+              and m.id > coalesce(p.lastReadMessageId, 0)
+              and (m.sender is null or m.sender.id <> :userId)
+            """)
+    long countTotalUnreadForUser(@Param("userId") Long userId);
 }
