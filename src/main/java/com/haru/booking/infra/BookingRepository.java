@@ -72,6 +72,25 @@ public interface BookingRepository extends JpaRepository<Booking, Long> {
     );
 
     /**
+     * Number of already-settled lessons for a (student, tutor, duration) tuple.
+     * Used as the 0-based FIFO position when matching a lesson to the pack it
+     * draws its per-lesson gross from.
+     */
+    @Query("""
+            select count(b)
+            from Booking b
+            where b.student.id = :studentId
+              and b.tutorProfile.id = :tutorProfileId
+              and b.lessonDurationMinutes = :lessonDurationMinutes
+              and b.settled = true
+            """)
+    long countSettledForTuple(
+            @Param("studentId") Long studentId,
+            @Param("tutorProfileId") Long tutorProfileId,
+            @Param("lessonDurationMinutes") int lessonDurationMinutes
+    );
+
+    /**
      * Reserved bookings whose end time has passed and that have not yet been
      * settled. These are the candidates the settlement job finalizes.
      */

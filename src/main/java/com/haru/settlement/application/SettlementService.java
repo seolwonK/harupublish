@@ -1,9 +1,12 @@
 package com.haru.settlement.application;
 
 import com.haru.booking.domain.Booking;
+import com.haru.booking.infra.BookingRepository;
 import com.haru.payment.domain.Payment;
 import com.haru.payment.domain.PaymentStatus;
 import com.haru.payment.infra.PaymentRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import com.haru.settings.application.PlatformSettingsService;
 import com.haru.settings.domain.FeePolicy;
 import com.haru.settlement.domain.EarningEntryType;
@@ -42,7 +45,10 @@ import java.util.Optional;
 @Service
 public class SettlementService {
 
+    private static final Logger log = LoggerFactory.getLogger(SettlementService.class);
+
     private final PaymentRepository paymentRepository;
+    private final BookingRepository bookingRepository;
     private final TutorEarningLedgerRepository tutorEarningLedgerRepository;
     private final MonthlySettlementRepository monthlySettlementRepository;
     private final PromoFeeWaiverGrantRepository promoFeeWaiverGrantRepository;
@@ -50,12 +56,14 @@ public class SettlementService {
 
     public SettlementService(
             PaymentRepository paymentRepository,
+            BookingRepository bookingRepository,
             TutorEarningLedgerRepository tutorEarningLedgerRepository,
             MonthlySettlementRepository monthlySettlementRepository,
             PromoFeeWaiverGrantRepository promoFeeWaiverGrantRepository,
             PlatformSettingsService platformSettingsService
     ) {
         this.paymentRepository = paymentRepository;
+        this.bookingRepository = bookingRepository;
         this.tutorEarningLedgerRepository = tutorEarningLedgerRepository;
         this.monthlySettlementRepository = monthlySettlementRepository;
         this.promoFeeWaiverGrantRepository = promoFeeWaiverGrantRepository;
@@ -116,9 +124,15 @@ public class SettlementService {
 
     /**
      * Per-lesson tutor gross (USD) for a booking, matched FIFO to the student's
-     * earliest PAID payment for the same (tutor, 25-minute) tuple. Falls back to
-     * the tutor's listed 25-minute USD price minus pack discounts only when no
-     * payment is found (defensive — booking creation requires paid credit).
+     * PAID payments for the same (tutor, duration) tuple: the n-th settled
+     * lesson draws from the n-th unit across packs in purchase order, so mixed
+     * pack prices ($20 1-pack + $18×5-pack) settle at the unit price of the
+     * pack actually being consumed. Falls back to zero only when no payment is
+     * found (defensive — booking creation requires paid credit).
+     *
+     * <p>If a partially-consumed pack is later refunded it drops out of the
+     * PAID list and future lessons re-index against the remaining packs;
+     * already-settled grosses stay locked in the ledger.</p>
      */
     private BigDecimal resolveGrossUsd(Booking booking) {
         List<Payment> paidPayments = paymentRepository
@@ -128,10 +142,29 @@ public class SettlementService {
                         booking.getLessonDurationMinutes(),
                         PaymentStatus.PAID
                 );
-        return paidPayments.stream()
-                .findFirst()
-                .map(Payment::perLessonDiscountedAmount)
-                .orElse(BigDecimal.ZERO.setScale(2));
+        if (paidPayments.isEmpty()) {
+            return BigDecimal.ZERO.setScale(2);
+        }
+
+        // 0-based FIFO position of this lesson = lessons already settled for the
+        // tuple (this booking is not yet marked settled at this point).
+        long fifoIndex = bookingRepository.countSettledForTuple(
+                booking.getStudent().getId(),
+                booking.getTutorProfile().getId(),
+                booking.getLessonDurationMinutes()
+        );
+        long cumulativeUnits = 0;
+        for (Payment payment : paidPayments) {
+            cumulativeUnits += payment.getLessonPackCount();
+            if (fifoIndex < cumulativeUnits) {
+                return payment.perLessonDiscountedAmount();
+            }
+        }
+        // More settled lessons than paid units (should not happen) — price at
+        // the most recent pack rather than failing the settlement.
+        log.warn("FIFO index {} exceeds paid units {} for booking {}; using last pack price.",
+                fifoIndex, cumulativeUnits, booking.getId());
+        return paidPayments.get(paidPayments.size() - 1).perLessonDiscountedAmount();
     }
 
     private void accumulateMonthlySettlement(
@@ -150,9 +183,31 @@ public class SettlementService {
                 .orElseGet(() -> monthlySettlementRepository.save(
                         MonthlySettlement.open(tutorProfileId, year, month, now)
                 ));
-        if (settlement.isOpen()) {
-            settlement.addLesson(grossUsd, platformFeeUsd, netUsd, now);
+        if (!settlement.isOpen()) {
+            // The booking's month was already closed by an admin (late settlement
+            // via the backstop job). Roll the amounts forward into the current
+            // month so the monthly reports stay reconciled with the ledger.
+            LocalDate today = LocalDate.ofInstant(now, ZoneOffset.UTC);
+            if (today.getYear() == year && today.getMonthValue() == month) {
+                log.warn("Monthly settlement {}-{} for tutor {} is {} but booking {} settled now; "
+                                + "amount written to ledger only.",
+                        year, month, tutorProfileId, settlement.getStatus(), booking.getId());
+                return;
+            }
+            settlement = monthlySettlementRepository.findForUpdate(tutorProfileId, today.getYear(), today.getMonthValue())
+                    .orElseGet(() -> monthlySettlementRepository.save(
+                            MonthlySettlement.open(tutorProfileId, today.getYear(), today.getMonthValue(), now)
+                    ));
+            if (!settlement.isOpen()) {
+                log.warn("Current monthly settlement {}-{} for tutor {} is also {}; booking {} "
+                                + "amount written to ledger only.",
+                        today.getYear(), today.getMonthValue(), tutorProfileId, settlement.getStatus(), booking.getId());
+                return;
+            }
+            log.info("Booking {} settled after {}-{} was closed; rolled forward into {}-{} for tutor {}.",
+                    booking.getId(), year, month, today.getYear(), today.getMonthValue(), tutorProfileId);
         }
+        settlement.addLesson(grossUsd, platformFeeUsd, netUsd, now);
     }
 
     private String memoFor(EarningEntryType entryType, Booking booking) {

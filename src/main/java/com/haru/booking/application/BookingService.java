@@ -132,17 +132,21 @@ public class BookingService {
     @Transactional
     public BookingResponse cancel(Long userId, Long bookingId, CancelBookingRequest request) {
         Booking booking = getBookingWithAccess(userId, bookingId);
-        FeePolicy feePolicy = platformSettingsService.currentFeePolicy();
         Instant now = Instant.now();
-        boolean lateCancel = booking.cancel(
-                request == null ? null : request.reason(),
-                feePolicy.cancelWindowHours(),
-                now
-        );
-        if (lateCancel) {
-            // Late cancel = lesson consumed, student refunded 0, 100% accrues to
-            // the tutor. Credit the earning immediately as cyber money.
-            settlementService.settleEarnedBooking(booking, EarningEntryType.NO_SHOW_EARNED, now);
+        String reason = request == null ? null : request.reason();
+
+        if (booking.getTutorProfile().getUser().getId().equals(userId)) {
+            // Tutor cancels their own lesson: always a normal cancel — the
+            // student's credit stays refundable and no earning accrues.
+            booking.cancelByTutor(reason, now);
+        } else {
+            FeePolicy feePolicy = platformSettingsService.currentFeePolicy();
+            boolean lateCancel = booking.cancel(reason, feePolicy.cancelWindowHours(), now);
+            if (lateCancel) {
+                // Student late cancel = lesson consumed, student refunded 0, 100%
+                // accrues to the tutor. Credit the earning immediately as cyber money.
+                settlementService.settleEarnedBooking(booking, EarningEntryType.NO_SHOW_EARNED, now);
+            }
         }
         chatNotificationService.notifyBookingCancelled(booking);
         return BookingResponse.from(booking, now);

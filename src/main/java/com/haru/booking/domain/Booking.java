@@ -141,6 +141,22 @@ public class Booking {
         return lateCancel;
     }
 
+    /**
+     * Tutor-initiated cancel. Always a NORMAL cancel regardless of timing: the
+     * student's credit stays refundable and the tutor earns nothing. Without
+     * this distinction a tutor could late-cancel their own lesson and bank the
+     * 100% no-show earning without teaching.
+     */
+    public void cancelByTutor(String reason, Instant now) {
+        if (status != BookingStatus.RESERVED) {
+            throw new BusinessException(ErrorCode.INVALID_REQUEST, "Only reserved bookings can be cancelled.");
+        }
+        this.status = BookingStatus.CANCELLED;
+        this.completionState = BookingCompletionState.CANCELLED_NORMAL;
+        this.cancelReason = reason;
+        touch(now);
+    }
+
     public Instant cancelDeadline(int cancelWindowHours) {
         return startAt.minus(Duration.ofHours(cancelWindowHours));
     }
