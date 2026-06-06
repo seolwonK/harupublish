@@ -2,16 +2,12 @@ package com.haru.chat.config;
 
 import com.haru.chat.infra.ChatRoomParticipantRepository;
 import com.haru.common.exception.HaruException;
+import com.haru.common.security.BearerTokenResolver;
 import com.haru.common.security.HaruPrincipal;
-import com.haru.common.security.JwtTokenProvider;
-import com.haru.user.domain.UserAccount;
-import com.haru.user.infra.UserAccountRepository;
-import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.JwtException;
 import org.springframework.messaging.Message;
 import org.springframework.messaging.MessageChannel;
 import org.springframework.messaging.MessagingException;
-import org.springframework.messaging.simp.stomp.StompCommand;
 import org.springframework.messaging.simp.stomp.StompHeaderAccessor;
 import org.springframework.messaging.support.ChannelInterceptor;
 import org.springframework.messaging.support.MessageHeaderAccessor;
@@ -21,7 +17,8 @@ import org.springframework.stereotype.Component;
  * JWT authentication and authorization for the STOMP channel.
  *
  * <ul>
- *   <li>CONNECT — validates the {@code Authorization} native header and binds a
+ *   <li>CONNECT — validates the {@code Authorization} native header (shared
+ *       {@link BearerTokenResolver}, same rules as HTTP) and binds a
  *       {@link StompPrincipal} to the session.</li>
  *   <li>SUBSCRIBE — room topics require membership; user queues are always
  *       scoped to the session principal by the broker.</li>
@@ -32,19 +29,14 @@ import org.springframework.stereotype.Component;
 @Component
 public class StompAuthChannelInterceptor implements ChannelInterceptor {
 
-    private static final String BEARER_PREFIX = "Bearer ";
-
-    private final JwtTokenProvider jwtTokenProvider;
-    private final UserAccountRepository userAccountRepository;
+    private final BearerTokenResolver bearerTokenResolver;
     private final ChatRoomParticipantRepository participantRepository;
 
     public StompAuthChannelInterceptor(
-            JwtTokenProvider jwtTokenProvider,
-            UserAccountRepository userAccountRepository,
+            BearerTokenResolver bearerTokenResolver,
             ChatRoomParticipantRepository participantRepository
     ) {
-        this.jwtTokenProvider = jwtTokenProvider;
-        this.userAccountRepository = userAccountRepository;
+        this.bearerTokenResolver = bearerTokenResolver;
         this.participantRepository = participantRepository;
     }
 
@@ -65,22 +57,8 @@ public class StompAuthChannelInterceptor implements ChannelInterceptor {
     }
 
     private void authenticate(StompHeaderAccessor accessor) {
-        String authorization = accessor.getFirstNativeHeader("Authorization");
-        if (authorization == null || !authorization.startsWith(BEARER_PREFIX)) {
-            throw new MessagingException("Authorization bearer token is required.");
-        }
         try {
-            Claims claims = jwtTokenProvider.parseClaims(authorization.substring(BEARER_PREFIX.length()));
-            Long userId = Long.valueOf(claims.getSubject());
-            UserAccount user = userAccountRepository.findWithRolesById(userId)
-                    .orElseThrow(() -> new MessagingException("User was not found."));
-            user.ensureActive();
-            HaruPrincipal principal = new HaruPrincipal(
-                    user.getId(),
-                    user.getEmail(),
-                    user.getRoles(),
-                    user.getActiveRole()
-            );
+            HaruPrincipal principal = bearerTokenResolver.resolve(accessor.getFirstNativeHeader("Authorization"));
             accessor.setUser(new StompPrincipal(principal));
         } catch (JwtException | IllegalArgumentException | HaruException exception) {
             throw new MessagingException("Invalid access token.");
