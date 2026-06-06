@@ -140,6 +140,14 @@ await api(`/api/chats/${room.id}/read`, {
 const unread = await api("/api/chats/unread-count", { token: tutor.accessToken });
 console.log("✓ tutor unread after read:", unread.count);
 
+// 읽음 표시 데이터 흐름: 학생 시점 방 목록에 상대(튜터)의 읽음 포인터가 노출되어야 한다.
+const studentRooms = await api("/api/chats", { token: student.accessToken });
+const studentDirect = studentRooms.rooms.find((entry) => entry.id === room.id);
+if (studentDirect.counterpartLastReadMessageId !== toTutor.message.id) {
+  throw new Error(`counterpartLastReadMessageId expected ${toTutor.message.id}, got ${studentDirect.counterpartLastReadMessageId}`);
+}
+console.log("✓ student sees counterpartLastReadMessageId:", studentDirect.counterpartLastReadMessageId, "(읽음 표시 데이터 OK)");
+
 // 7. 메시지 히스토리 양쪽 시점 검증
 const history = await api(`/api/chats/${room.id}/messages`, { token: student.accessToken });
 console.log("✓ history:", history.messages.map((m) => `${m.senderName}: ${m.body}`));

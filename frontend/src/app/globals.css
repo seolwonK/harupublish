@@ -3,6 +3,7 @@
 @tailwind utilities;
 
 :root {
+  --app-header-height: 72px;
   --background: #fffaf2;
   --panel: #ffffff;
   --panel-soft: #fff7ea;
@@ -304,7 +305,7 @@ textarea:focus-visible {
   position: sticky;
   top: 0;
   z-index: 20;
-  min-height: 72px;
+  min-height: var(--app-header-height);
   display: grid;
   grid-template-columns: 180px 1fr auto;
   align-items: center;
@@ -2353,7 +2354,8 @@ th {
   display: grid;
   grid-template-columns: clamp(260px, 26%, 320px) minmax(0, 1fr);
   width: min(1180px, calc(100vw - 32px));
-  height: calc(100vh - 56px - 56px);
+  /* 헤더(공유 변수) + 상하 마진 28px*2 를 제외한 뷰포트 높이에 정확히 맞춘다. */
+  height: calc(100vh - var(--app-header-height) - 56px);
   min-height: 480px;
   margin: 28px auto;
   overflow: hidden;
@@ -2443,6 +2445,17 @@ th {
   background: var(--brand);
   color: white;
   font-size: 11px;
+}
+
+/* 비로그인 등 빈 상태: 패널 정중앙에 안내 + 버튼을 콘텐츠 크기로 배치 */
+.chat-empty {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 40px;
 }
 
 .chat-room {
@@ -2551,13 +2564,34 @@ th {
   align-self: flex-start;
 }
 
-.message-time {
+.message-meta {
+  display: flex;
+  flex-direction: column;
   flex-shrink: 0;
+  gap: 2px;
   padding-bottom: 3px;
+}
+
+.message-row.mine .message-meta {
+  align-items: flex-end;
+}
+
+.message-row.other .message-meta {
+  align-items: flex-start;
+}
+
+.message-time {
   color: var(--muted);
   font-size: 11px;
   line-height: 1;
   white-space: nowrap;
+}
+
+.message-read {
+  color: var(--brand);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
 }
 
 .chat-input {

@@ -90,6 +90,9 @@ function ChatPageContent() {
   const [notice, setNotice] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
 
+  // 상대 읽음 포인터의 실시간 갱신분 (READ 이벤트). 방 전환 시 초기화.
+  const [liveCounterpartReadId, setLiveCounterpartReadId] = useState<number | null>(null);
+
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const messageAreaRef = useRef<HTMLDivElement | null>(null);
   const autoScrollRef = useRef(true);
@@ -127,6 +130,14 @@ function ChatPageContent() {
 
   const handleRoomEvent = useCallback(
     (event: ChatSocketEvent) => {
+      if (event.type === "READ") {
+        // 상대가 읽음 포인터를 옮겼다 → 내 메시지 '읽음' 표시 갱신.
+        if (event.userId !== user?.id && typeof event.lastReadMessageId === "number") {
+          const readId = event.lastReadMessageId;
+          setLiveCounterpartReadId((current) => (current === null || readId > current ? readId : current));
+        }
+        return;
+      }
       if (event.type !== "MESSAGE" || !event.message) return;
       const message = event.message;
       setMessages((current) => (current.some((existing) => existing.id === message.id) ? current : [...current, message]));
@@ -142,7 +153,26 @@ function ChatPageContent() {
   const handleUnreadEvent = useCallback(
     (event: ChatSocketEvent) => {
       if (event.chatRoomId === selectedRoomId) return;
-      void reloadRooms();
+      const message = event.message;
+      setRooms((current) => {
+        // 목록에 없는 새 방이면 전체 목록을 다시 불러온다.
+        if (!current.some((room) => room.id === event.chatRoomId)) {
+          void reloadRooms();
+          return current;
+        }
+        // 알고 있는 방이면 리페치 없이 미읽음 수와 미리보기만 제자리 갱신.
+        const updated = current.map((room) =>
+          room.id === event.chatRoomId
+            ? {
+                ...room,
+                unreadCount: room.unreadCount + 1,
+                lastMessagePreview: message ? (message.body ?? message.attachmentName ?? "[파일]") : room.lastMessagePreview,
+                lastMessageAt: message?.createdAt ?? room.lastMessageAt
+              }
+            : room
+        );
+        return [...updated].sort((a, b) => (b.lastMessageAt ?? "").localeCompare(a.lastMessageAt ?? ""));
+      });
     },
     [reloadRooms, selectedRoomId]
   );
@@ -188,6 +218,7 @@ function ChatPageContent() {
     let cancelled = false;
     setMessages([]);
     setHasMore(false);
+    setLiveCounterpartReadId(null);
     autoScrollRef.current = true;
 
     haruApi
@@ -230,6 +261,20 @@ function ChatPageContent() {
         (room.lastMessagePreview ?? "").toLowerCase().includes(query)
     );
   }, [rooms, search]);
+
+  // 상대 읽음 포인터 = 방 목록 스냅샷 vs 실시간 READ 이벤트 중 더 최신 값.
+  const counterpartReadId = Math.max(liveCounterpartReadId ?? 0, selectedRoom?.counterpartLastReadMessageId ?? 0);
+
+  // '읽음' 라벨은 상대가 읽은 내 메시지 중 마지막 하나에만 붙인다.
+  const lastReadMineId = useMemo(() => {
+    let last: number | null = null;
+    for (const message of messages) {
+      if (message.senderUserId === user?.id && message.id > 0 && message.id <= counterpartReadId) {
+        last = message.id;
+      }
+    }
+    return last;
+  }, [messages, counterpartReadId, user?.id]);
 
   async function loadOlderMessages() {
     if (!accessToken || selectedRoomId === null || messages.length === 0) return;
@@ -302,7 +347,7 @@ function ChatPageContent() {
       <>
         <AppHeader />
         <main className="chat-layout">
-          <section className="chat-room" style={{ gridColumn: "1 / -1" }}>
+          <section className="chat-empty">
             <ApiNotice type="info">채팅을 사용하려면 로그인이 필요합니다.</ApiNotice>
             <Button as="a" href="/login">
               로그인하러 가기
@@ -369,7 +414,10 @@ function ChatPageContent() {
                   {showDivider ? <span className="date-divider">{formatDateDivider(message.createdAt)}</span> : null}
                   <div className={`message-row ${mine ? "mine" : "other"}`}>
                     <MessageBubble message={message} mine={mine} />
-                    <span className="message-time">{formatMessageTime(message.createdAt)}</span>
+                    <div className="message-meta">
+                      {mine && message.id === lastReadMineId ? <span className="message-read">읽음</span> : null}
+                      <span className="message-time">{formatMessageTime(message.createdAt)}</span>
+                    </div>
                   </div>
                 </Fragment>
               );

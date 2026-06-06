@@ -373,6 +373,8 @@ export type ChatRoomSummary = {
   lastMessagePreview: string | null;
   lastMessageAt: string | null;
   unreadCount: number;
+  /** 상대가 어디까지 읽었는지 — 내 메시지 '읽음' 표시용 (시스템 방은 null). */
+  counterpartLastReadMessageId: number | null;
 };
 
 export type ChatRoomListResponse = {

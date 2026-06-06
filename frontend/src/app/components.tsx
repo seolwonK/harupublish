@@ -263,7 +263,10 @@ export function CurrencyToggle() {
 
 const CHAT_UNREAD_POLL_MS = 30_000;
 
-/** 네비게이션 배지용 전체 미읽음 채팅 수. 30초 간격으로 폴링한다. */
+/**
+ * 네비게이션 배지용 전체 미읽음 채팅 수. 30초 간격으로 폴링하되 백그라운드
+ * 탭에서는 건너뛰고, 탭이 다시 보이면 즉시 갱신한다.
+ */
 function useChatUnreadCount() {
   const { accessToken } = useAuth();
   const [count, setCount] = useState(0);
@@ -275,6 +278,7 @@ function useChatUnreadCount() {
     }
     let cancelled = false;
     const load = () => {
+      if (document.visibilityState === "hidden") return;
       haruApi
         .getChatUnreadCount(accessToken)
         .then((response) => {
@@ -284,9 +288,11 @@ function useChatUnreadCount() {
     };
     load();
     const intervalId = setInterval(load, CHAT_UNREAD_POLL_MS);
+    document.addEventListener("visibilitychange", load);
     return () => {
       cancelled = true;
       clearInterval(intervalId);
+      document.removeEventListener("visibilitychange", load);
     };
   }, [accessToken]);
 
