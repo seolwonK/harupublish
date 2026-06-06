@@ -28,6 +28,9 @@ spring:
 
 server:
   port: ${PORT:8080}
+  # 리버스 프록시(Render 등) 뒤에서 X-Forwarded-* 헤더를 신뢰해
+  # 업로드 URL(ServletUriComponentsBuilder)이 https/실제 도메인으로 생성되게 한다.
+  forward-headers-strategy: framework
   compression:
     enabled: true
     mime-types: application/json,application/xml,text/html,text/xml,text/plain,text/css,application/javascript

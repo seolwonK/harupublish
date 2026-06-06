@@ -6,6 +6,12 @@ services:
     rootDir: .
     healthCheckPath: /swagger-ui.html
     autoDeploy: true
+    # 업로드(튜터 이미지, 채팅 첨부) 영속화 — 디스크 없이는 재배포마다 파일이 소실된다.
+    # 주의: 디스크가 붙은 서비스는 zero-downtime 배포가 비활성화된다(재시작 배포).
+    disk:
+      name: haru-uploads
+      mountPath: /app/uploads
+      sizeGB: 1
     envVars:
       - key: SPRING_PROFILES_ACTIVE
         value: render
