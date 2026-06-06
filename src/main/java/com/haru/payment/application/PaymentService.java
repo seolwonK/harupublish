@@ -155,21 +155,81 @@ public class PaymentService {
             boolean refunded = attributes.path("refunded").asBoolean(false);
             String status = attributes.path("status").asText("");
 
+            // Defect #8b: bind the webhook to THIS payment and store before acting on
+            // it — store_id (when configured) must match, and the order's amount /
+            // currency (when the provider sent them) must match the recorded payment.
+            // A mismatch is a forged / cross-store / tampered event and is rejected.
+            verifyWebhookStore(root);
+            verifyWebhookAmountAndCurrency(payment, attributes);
+
             if ("order_refunded".equals(resolvedEventName) || refunded) {
+                // Defect #6: a provider real refund issues NO Haru credit (cash was
+                // returned). A payment already REFUNDED — including one refunded as
+                // credit by an admin — is skipped (markRefundedByProvider returns
+                // false), so a re-delivered refund webhook never double-processes.
                 payment.markRefundedByProvider(orderId, orderIdentifier);
                 return;
             }
             if ("order_created".equals(resolvedEventName) || "order_updated".equals(resolvedEventName)) {
                 if ("paid".equalsIgnoreCase(status)) {
+                    // Defect #8c: markPaidByProvider is idempotent — an already
+                    // PAID / terminal payment is left untouched (returns false), so
+                    // a re-delivered order_created never re-runs markPaid.
                     payment.markPaidByProvider(orderId, orderIdentifier);
                 } else if ("failed".equalsIgnoreCase(status)) {
-                    payment.markFailed();
+                    if (!payment.isTerminal() && payment.getStatus() != PaymentStatus.PAID) {
+                        payment.markFailed();
+                    }
                 }
             }
         } catch (BusinessException exception) {
             throw exception;
         } catch (Exception exception) {
             throw new BusinessException(ErrorCode.INVALID_REQUEST, "Invalid Lemon Squeezy webhook payload.");
+        }
+    }
+
+    /**
+     * Defect #8b — store guard. When a store id is configured, the event's
+     * {@code data.attributes.store_id} must match it; a missing or different store
+     * id means the event is not for our store and is rejected. When no store id is
+     * configured (e.g. local/test), the check is skipped.
+     */
+    private void verifyWebhookStore(JsonNode root) {
+        String configuredStoreId = lemonSqueezyProperties.getStoreId();
+        if (!StringUtils.hasText(configuredStoreId)) {
+            return;
+        }
+        JsonNode storeNode = root.path("data").path("attributes").path("store_id");
+        String eventStoreId = storeNode.isMissingNode() || storeNode.isNull() ? "" : storeNode.asText("");
+        if (!configuredStoreId.equals(eventStoreId)) {
+            throw new BusinessException(ErrorCode.INVALID_REQUEST, "Lemon Squeezy webhook store_id does not match the configured store.");
+        }
+    }
+
+    /**
+     * Defect #8b — amount/currency guard. When the provider includes
+     * {@code attributes.total} (minor units) and/or {@code attributes.currency},
+     * they must match the recorded payment ({@code totalAmount} in cents, currency).
+     * Absent fields are not enforced (some events omit them); present-but-mismatched
+     * fields reject the event as tampered / mis-routed.
+     */
+    private void verifyWebhookAmountAndCurrency(Payment payment, JsonNode attributes) {
+        JsonNode currencyNode = attributes.path("currency");
+        if (!currencyNode.isMissingNode() && !currencyNode.isNull() && StringUtils.hasText(currencyNode.asText(""))) {
+            String eventCurrency = currencyNode.asText("");
+            if (!payment.getCurrency().equalsIgnoreCase(eventCurrency)) {
+                throw new BusinessException(ErrorCode.INVALID_REQUEST, "Lemon Squeezy webhook currency does not match the payment.");
+            }
+        }
+
+        JsonNode totalNode = attributes.path("total");
+        if (totalNode.isNumber()) {
+            long eventTotalMinor = totalNode.asLong();
+            long expectedTotalMinor = lemonSqueezyClient.toProviderMinorUnits(payment.getTotalAmount());
+            if (eventTotalMinor != expectedTotalMinor) {
+                throw new BusinessException(ErrorCode.INVALID_REQUEST, "Lemon Squeezy webhook total does not match the payment amount.");
+            }
         }
     }
 

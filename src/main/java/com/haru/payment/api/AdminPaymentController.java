@@ -2,14 +2,18 @@ package com.haru.payment.api;
 
 import com.haru.common.response.ApiResponse;
 import com.haru.payment.api.dto.PaymentResponse;
+import com.haru.payment.api.dto.RefundRequestResponse;
 import com.haru.payment.application.PaymentRefundService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+
+import java.util.List;
 
 @RestController
 @RequestMapping("/api/admin/payments")
@@ -20,6 +24,16 @@ public class AdminPaymentController {
 
     public AdminPaymentController(PaymentRefundService paymentRefundService) {
         this.paymentRefundService = paymentRefundService;
+    }
+
+    @Operation(
+            summary = "환불 요청 목록 조회",
+            description = "REFUND_REQUESTED 상태의 결제 목록을 신청 시각 오름차순으로 조회합니다. 관리자 환불 큐(#11)에서 사용합니다.",
+            security = @SecurityRequirement(name = "bearerAuth")
+    )
+    @GetMapping("/refund-requests")
+    public ApiResponse<List<RefundRequestResponse>> getRefundRequests() {
+        return ApiResponse.success(paymentRefundService.listRefundRequests());
     }
 
     @Operation(

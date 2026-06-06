@@ -106,6 +106,39 @@ public class TutorEarningLedger {
             String memo,
             Instant now
     ) {
+        return lessonEarning(
+                tutorProfileId,
+                entryType,
+                bookingId,
+                grossAmountUsd,
+                platformFeeAmountUsd,
+                netAmountUsd,
+                previousBalanceUsd,
+                appliedPlatformFeeRate,
+                null,
+                memo,
+                now
+        );
+    }
+
+    /**
+     * Lesson earning with an explicit {@code idempotencyKey}. The key
+     * ({@code EARNED:booking:{id}:{entryType}}) is a secondary backstop against a
+     * double credit, complementing the unique(booking_id, entry_type) constraint.
+     */
+    public static TutorEarningLedger lessonEarning(
+            Long tutorProfileId,
+            EarningEntryType entryType,
+            Long bookingId,
+            BigDecimal grossAmountUsd,
+            BigDecimal platformFeeAmountUsd,
+            BigDecimal netAmountUsd,
+            BigDecimal previousBalanceUsd,
+            BigDecimal appliedPlatformFeeRate,
+            String idempotencyKey,
+            String memo,
+            Instant now
+    ) {
         BigDecimal balanceAfter = previousBalanceUsd.add(netAmountUsd);
         return new TutorEarningLedger(
                 tutorProfileId,
@@ -117,7 +150,7 @@ public class TutorEarningLedger {
                 balanceAfter,
                 appliedPlatformFeeRate,
                 null,
-                null,
+                idempotencyKey,
                 memo,
                 now
         );

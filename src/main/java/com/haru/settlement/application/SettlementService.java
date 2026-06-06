@@ -81,9 +81,12 @@ public class SettlementService {
         if (booking.isSettled()) {
             return Optional.empty();
         }
+        // Defect #5 guard (read side): any existing ledger row for this booking
+        // means it was already credited in a prior run — stamp the booking and
+        // stop. The unique(booking_id, entry_type) constraint (V27) is the write
+        // side backstop against a concurrent double credit slipping past this read.
         Optional<TutorEarningLedger> existing = tutorEarningLedgerRepository.findFirstByBookingId(booking.getId());
         if (existing.isPresent()) {
-            // Already credited in a prior run; just stamp the booking idempotently.
             booking.markSettled(existing.get().getNetAmountUsd(), now);
             return Optional.empty();
         }
@@ -111,6 +114,7 @@ public class SettlementService {
                 netUsd,
                 previousBalance,
                 platformFeeRate,
+                "EARNED:booking:" + booking.getId() + ":" + entryType,
                 memoFor(entryType, booking),
                 now
         );
@@ -124,23 +128,30 @@ public class SettlementService {
 
     /**
      * Per-lesson tutor gross (USD) for a booking, matched FIFO to the student's
-     * PAID payments for the same (tutor, duration) tuple: the n-th settled
-     * lesson draws from the n-th unit across packs in purchase order, so mixed
-     * pack prices ($20 1-pack + $18×5-pack) settle at the unit price of the
-     * pack actually being consumed. Falls back to zero only when no payment is
-     * found (defensive — booking creation requires paid credit).
+     * PAID payments for the same (tutor, duration) tuple.
      *
-     * <p>If a partially-consumed pack is later refunded it drops out of the
-     * PAID list and future lessons re-index against the remaining packs;
-     * already-settled grosses stay locked in the ledger.</p>
+     * <p>The booking's FIFO position is the number of lessons already settled for
+     * the tuple ({@link BookingRepository#countSettledForTuple}); payments are
+     * walked oldest-first accumulating {@code packCount} until that index falls
+     * inside a pack, so the n-th settled lesson draws from the pack actually being
+     * consumed (defect #2 — mixed pack prices settle at the right unit price).</p>
+     *
+     * <p>Within the matched pack the value comes from {@link Payment#perLessonSlots()},
+     * a largest-remainder split whose sum equals the pack's {@code discounted} to the
+     * cent, so {@code Σ(earned gross) == Σ(payment.discounted)} with no per-lesson
+     * rounding leak (defect #3).</p>
+     *
+     * <p>Falls back to {@code 0.00} only when no payment exists (defensive — booking
+     * creation already requires paid credit).</p>
      */
     private BigDecimal resolveGrossUsd(Booking booking) {
+        Long studentId = booking.getStudent().getId();
+        Long tutorProfileId = booking.getTutorProfile().getId();
+        int duration = booking.getLessonDurationMinutes();
+
         List<Payment> paidPayments = paymentRepository
                 .findAllByStudentIdAndTutorProfileIdAndLessonDurationMinutesAndStatusOrderByCreatedAtAsc(
-                        booking.getStudent().getId(),
-                        booking.getTutorProfile().getId(),
-                        booking.getLessonDurationMinutes(),
-                        PaymentStatus.PAID
+                        studentId, tutorProfileId, duration, PaymentStatus.PAID
                 );
         if (paidPayments.isEmpty()) {
             return BigDecimal.ZERO.setScale(2);
@@ -148,23 +159,24 @@ public class SettlementService {
 
         // 0-based FIFO position of this lesson = lessons already settled for the
         // tuple (this booking is not yet marked settled at this point).
-        long fifoIndex = bookingRepository.countSettledForTuple(
-                booking.getStudent().getId(),
-                booking.getTutorProfile().getId(),
-                booking.getLessonDurationMinutes()
-        );
+        long fifoIndex = bookingRepository.countSettledForTuple(studentId, tutorProfileId, duration);
+
         long cumulativeUnits = 0;
         for (Payment payment : paidPayments) {
-            cumulativeUnits += payment.getLessonPackCount();
-            if (fifoIndex < cumulativeUnits) {
-                return payment.perLessonDiscountedAmount();
+            int pack = payment.getLessonPackCount();
+            if (fifoIndex < cumulativeUnits + pack) {
+                // Largest-remainder slot within the matched pack (defect #3: slots
+                // sum to the pack discounted, no per-lesson rounding leak).
+                return payment.perLessonSlots().get((int) (fifoIndex - cumulativeUnits));
             }
+            cumulativeUnits += pack;
         }
-        // More settled lessons than paid units (should not happen) — price at
-        // the most recent pack rather than failing the settlement.
+        // More settled lessons than paid units (should not happen) — price at the
+        // last slot of the most recent pack rather than failing the settlement.
         log.warn("FIFO index {} exceeds paid units {} for booking {}; using last pack price.",
                 fifoIndex, cumulativeUnits, booking.getId());
-        return paidPayments.get(paidPayments.size() - 1).perLessonDiscountedAmount();
+        List<BigDecimal> lastSlots = paidPayments.get(paidPayments.size() - 1).perLessonSlots();
+        return lastSlots.get(lastSlots.size() - 1);
     }
 
     private void accumulateMonthlySettlement(
