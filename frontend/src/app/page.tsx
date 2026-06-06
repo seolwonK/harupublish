@@ -23,6 +23,7 @@ import {
   haruApi,
   PaymentResponse,
   resolveAssetUrl,
+  resolveStudentPrice25,
   ScheduleSlotResponse,
   toMoney
 } from "./api";
@@ -96,7 +97,7 @@ function tutorFromExpert(expert: ExpertListResponse): HomeTutor {
     tag: categoryLabel(expert.category),
     subject: expert.shortIntroduction ?? categoryLabel(expert.category),
     languages: languages?.length ? languages.join(" · ") : "언어 정보 업데이트 예정",
-    price: `25분 ${toMoney(expert.lessonPrice25Amount)} / 50분 ${toMoney(expert.lessonPrice50Amount)}`,
+    price: `25분 ${toMoney(resolveStudentPrice25(expert))} / 50분 ${toMoney(expert.lessonPrice50Amount)}`,
     imageUrl: expert.thumbnailUrl || expert.profileImageUrl
   };
 }

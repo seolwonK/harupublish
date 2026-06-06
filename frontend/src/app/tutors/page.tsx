@@ -2,7 +2,7 @@
 
 import { ArrowRight, Globe2, Search, Star } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { ExpertListResponse, haruApi, resolveAssetUrl, toMoney } from "../api";
+import { ExpertListResponse, haruApi, resolveAssetUrl, resolveStudentPrice25, toMoney } from "../api";
 import { ApiNotice, AppHeader, Badge, Button, EmptyState, SectionHeader, categoryLabel } from "../components";
 
 const DEFAULT_TUTOR_IMAGE = "/images/default-tutor-profile.png";
@@ -12,7 +12,7 @@ function tutorImage(tutor: ExpertListResponse) {
 }
 
 function priceLabel(tutor: ExpertListResponse) {
-  return `25분 ${toMoney(tutor.lessonPrice25Amount)} / 50분 ${toMoney(tutor.lessonPrice50Amount)}`;
+  return `25분 ${toMoney(resolveStudentPrice25(tutor))} / 50분 ${toMoney(tutor.lessonPrice50Amount)}`;
 }
 
 export default function TutorsPage() {
