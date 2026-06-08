@@ -208,17 +208,21 @@ class BookingIntegrationTest {
         createCheckout(studentToken, nearTutorProfileId);
         long pastBookingId = createBooking(studentToken, nearTutorProfileId, pastSlotId);
 
+        // Late cancel (inside the cancel window) no longer errors: it now goes
+        // through as a CANCELLED booking with a late completion state, the lesson
+        // is consumed and 100% accrues to the tutor.
         mockMvc.perform(patch("/api/bookings/%d/cancel".formatted(pastBookingId))
                         .header("Authorization", auth(studentToken))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"reason\":\"Too late\"}"))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.error.code").value("INVALID_REQUEST"));
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("CANCELLED"))
+                .andExpect(jsonPath("$.data.cancelReason").value("Too late"));
 
         mockMvc.perform(get("/api/bookings/%d".formatted(pastBookingId))
                         .header("Authorization", auth(studentToken)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.status").value("COMPLETED"))
+                .andExpect(jsonPath("$.data.status").value("CANCELLED"))
                 .andExpect(jsonPath("$.data.joinAvailable").value(false));
 
         mockMvc.perform(get("/api/bookings/%d/join".formatted(pastBookingId))

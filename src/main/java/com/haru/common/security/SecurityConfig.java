@@ -39,13 +39,18 @@ public class SecurityConfig {
     ) {
         this.jwtAuthenticationFilter = jwtAuthenticationFilter;
         this.objectMapper = objectMapper;
-        List<String> configuredPatterns = Arrays.stream(corsAllowedOriginPatterns.split(","))
+        this.corsAllowedOriginPatterns = resolveCorsPatterns(corsAllowedOriginPatterns);
+    }
+
+    /** Shared by the HTTP CORS config and the STOMP handshake endpoint. */
+    public static List<String> resolveCorsPatterns(String rawPatterns) {
+        List<String> configuredPatterns = Arrays.stream(rawPatterns.split(","))
                 .map(String::trim)
                 .map(SecurityConfig::stripWrappingQuotes)
                 .map(SecurityConfig::stripTrailingSlash)
                 .filter(origin -> !origin.isEmpty())
                 .toList();
-        this.corsAllowedOriginPatterns = withDefaultCorsPatterns(configuredPatterns);
+        return withDefaultCorsPatterns(configuredPatterns);
     }
 
     @Bean
@@ -61,12 +66,14 @@ public class SecurityConfig {
                                 "/",
                                 "/test-ui.html",
                                 "/uploads/**",
+                                "/ws-chat/**",
                                 "/swagger-ui.html",
                                 "/swagger-ui/**",
                                 "/v3/api-docs",
                                 "/v3/api-docs/**"
                         ).permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/payments/webhooks/lemonsqueezy", "/api/payments/webhooks/lemon-squeezy").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/exchange-rates/latest").permitAll()
                         .requestMatchers("/api/tutors/me/**").authenticated()
                         .requestMatchers(HttpMethod.GET, "/api/tutors", "/api/tutors/*", "/api/tutors/*/schedule", "/api/tutors/*/reviews").permitAll()
                         .requestMatchers("/api/auth/signup", "/api/auth/login", "/api/auth/refresh").permitAll()

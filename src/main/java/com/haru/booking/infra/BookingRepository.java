@@ -50,10 +50,95 @@ public interface BookingRepository extends JpaRepository<Booking, Long> {
             @Param("to") Instant to
         );
 
-    long countByStudentIdAndTutorProfileIdAndLessonDurationMinutesAndStatusNot(
-            Long studentId,
-            Long tutorProfileId,
-            int lessonDurationMinutes,
-            BookingStatus status
+    /**
+     * Count of lessons a student has consumed for a (tutor, duration) tuple.
+     * A lesson is consumed unless it was a NORMAL (in-window) cancel — late
+     * cancels and no-shows still burn the credit, so only CANCELLED_NORMAL is
+     * excluded. RESERVED bookings with no completion state yet are still
+     * consuming the slot, so they count too.
+     */
+    @Query("""
+            select count(b)
+            from Booking b
+            where b.student.id = :studentId
+              and b.tutorProfile.id = :tutorProfileId
+              and b.lessonDurationMinutes = :lessonDurationMinutes
+              and (b.completionState is null or b.completionState <> com.haru.booking.domain.BookingCompletionState.CANCELLED_NORMAL)
+            """)
+    long countConsumedLessons(
+            @Param("studentId") Long studentId,
+            @Param("tutorProfileId") Long tutorProfileId,
+            @Param("lessonDurationMinutes") int lessonDurationMinutes
+    );
+
+    /**
+     * Number of already-settled lessons for a (student, tutor, duration) tuple.
+     * Used as the 0-based FIFO position when matching a lesson to the pack it
+     * draws its per-lesson gross from.
+     */
+    @Query("""
+            select count(b)
+            from Booking b
+            where b.student.id = :studentId
+              and b.tutorProfile.id = :tutorProfileId
+              and b.lessonDurationMinutes = :lessonDurationMinutes
+              and b.settled = true
+            """)
+    long countSettledForTuple(
+            @Param("studentId") Long studentId,
+            @Param("tutorProfileId") Long tutorProfileId,
+            @Param("lessonDurationMinutes") int lessonDurationMinutes
+    );
+
+    /**
+     * Reserved bookings whose end time has passed and that have not yet been
+     * settled. These are the candidates the settlement job finalizes.
+     */
+    @EntityGraph(attributePaths = {"student", "tutorProfile", "tutorProfile.user", "scheduleSlot"})
+    @Query("""
+            select b
+            from Booking b
+            where b.status = com.haru.booking.domain.BookingStatus.RESERVED
+              and b.settled = false
+              and b.endAt <= :now
+            order by b.endAt asc
+            """)
+    List<Booking> findReservedDueForSettlement(@Param("now") Instant now);
+
+    /**
+     * Late-cancel / no-show bookings that have been marked CANCELLED but whose
+     * earning has not been credited to the tutor yet.
+     */
+    @EntityGraph(attributePaths = {"student", "tutorProfile", "tutorProfile.user", "scheduleSlot"})
+    @Query("""
+            select b
+            from Booking b
+            where b.settled = false
+              and b.completionState = com.haru.booking.domain.BookingCompletionState.CANCELLED_LATE
+            order by b.updatedAt asc
+            """)
+    List<Booking> findLateCancelDueForSettlement();
+
+    /**
+     * Slot-consuming bookings for a (student, tutor, duration) tuple, ordered the
+     * way settlement consumes paid slots: {@code startAt} ascending, {@code id}
+     * ascending as a deterministic tie-break. A booking consumes a slot unless it
+     * was a NORMAL (in-window) cancel — late cancels, no-shows, completed and
+     * still-reserved lessons all hold a slot. This ordering defines the FIFO index
+     * a booking has against the student's paid pack slots (defect #2).
+     */
+    @Query("""
+            select b
+            from Booking b
+            where b.student.id = :studentId
+              and b.tutorProfile.id = :tutorProfileId
+              and b.lessonDurationMinutes = :lessonDurationMinutes
+              and (b.completionState is null or b.completionState <> com.haru.booking.domain.BookingCompletionState.CANCELLED_NORMAL)
+            order by b.startAt asc, b.id asc
+            """)
+    List<Booking> findSlotConsumingBookings(
+            @Param("studentId") Long studentId,
+            @Param("tutorProfileId") Long tutorProfileId,
+            @Param("lessonDurationMinutes") int lessonDurationMinutes
     );
 }

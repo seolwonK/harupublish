@@ -1,10 +1,15 @@
 "use client";
 
-import { CalendarCheck, CheckCircle2, Clock, DollarSign, FileCheck2, Video } from "lucide-react";
+import { CalendarCheck, CheckCircle2, Clock, FileCheck2, Video, Wallet } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { BookingResponse, dateRangeFromToday, haruApi, ScheduleSlotResponse, TutorProfileResponse } from "../../api";
+import { BookingResponse, dateRangeFromToday, formatMoney, haruApi, ScheduleSlotResponse, TutorEarningsResponse, TutorProfileResponse } from "../../api";
 import { useAuth } from "../../auth";
 import { ApiNotice, Avatar, Badge, Button, EmptyState, SectionHeader, Sidebar, StatCard, statusLabel } from "../../components";
+
+// 수익/잔액은 항상 USD 고정 표기 (전역 통화토글 무시).
+function usd(value: number | string | null | undefined) {
+  return formatMoney(value, { currency: "USD" });
+}
 
 function profileCompletion(profile: TutorProfileResponse | null, slotCount: number) {
   return [profile?.displayName, profile?.shortIntroduction, profile?.aboutMe, profile?.whatIOffer, profile?.availableLanguages?.length, slotCount > 0]
@@ -16,6 +21,7 @@ export default function TutorDashboardPage() {
   const [profile, setProfile] = useState<TutorProfileResponse | null>(null);
   const [slots, setSlots] = useState<ScheduleSlotResponse[]>([]);
   const [bookings, setBookings] = useState<BookingResponse[]>([]);
+  const [earnings, setEarnings] = useState<TutorEarningsResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -24,12 +30,14 @@ export default function TutorDashboardPage() {
     Promise.all([
       haruApi.getMyTutorProfile(accessToken).catch(() => null),
       haruApi.getMySchedule(accessToken, range.from, range.to).catch(() => ({ slots: [] })),
-      haruApi.getMyBookings(accessToken, "tutor").catch(() => ({ bookings: [] }))
+      haruApi.getMyBookings(accessToken, "tutor").catch(() => ({ bookings: [] })),
+      haruApi.getMyEarnings(accessToken).catch(() => null)
     ])
-      .then(([nextProfile, schedule, bookingResponse]) => {
+      .then(([nextProfile, schedule, bookingResponse, earningsResponse]) => {
         setProfile(nextProfile);
         setSlots(schedule.slots);
         setBookings(bookingResponse.bookings);
+        setEarnings(earningsResponse);
       })
       .catch((err: Error) => setError(err.message));
   }, [accessToken]);
@@ -73,7 +81,7 @@ export default function TutorDashboardPage() {
           <StatCard label="오늘 수업" value={String(todayBookingCount)} hint="담당 수업 기준" />
           <StatCard label="공개 시간" value={String(slots.length)} hint="30일 내 등록된 슬롯" />
           <StatCard label="완료 수업" value={String(completedBookings.length)} hint="완료된 담당 수업" />
-          <StatCard label="예상 수익" value="USD 0.00" hint="정산 API 연동 예정" />
+          <StatCard label="인출 가능 잔액" value={usd(earnings?.availableBalanceAmount)} hint="사이버머니 (USD)" />
         </div>
 
         {approved ? (
@@ -155,12 +163,71 @@ export default function TutorDashboardPage() {
             <strong>완료 수업</strong>
             <span>수업이 완료되면 후기 작성, 정산 가능 상태와 함께 표시됩니다.</span>
           </section>
-          <section className="panel mini-dashboard-card">
-            <DollarSign size={22} />
-            <strong>수익 관리</strong>
-            <span>결제와 정산 데이터가 연결되면 예상 수익과 지급 상태를 확인할 수 있습니다.</span>
+
+          <section className="panel dashboard-panel earnings-summary-card">
+            <SectionHeader
+              eyebrow="Earnings"
+              title="수익 관리"
+              description="플랫폼 수수료 15% 차감 후 사이버머니(USD)로 적립됩니다."
+              action={<Button as="a" href="/tutor/earnings" variant="secondary"><Wallet size={15} /> 수익 관리</Button>}
+            />
+            <div className="earnings-summary-grid">
+              <div>
+                <span>인출 가능 잔액</span>
+                <strong>{usd(earnings?.availableBalanceAmount)}</strong>
+              </div>
+              <div>
+                <span>누적 적립</span>
+                <strong>{usd(earnings?.totalEarnedAmount)}</strong>
+              </div>
+              <div>
+                <span>인출 진행 중</span>
+                <strong>{usd(earnings?.pendingWithdrawalAmount)}</strong>
+              </div>
+            </div>
+            <span className="usd-fixed-note">USD 고정 표기 · 잔액·원장은 통화 토글과 무관</span>
+            <Button as="a" href="/tutor/earnings" className="wide">
+              <Wallet size={16} /> 인출 요청 / 정산 보기
+            </Button>
           </section>
         </div>
+
+        <style>{`
+          .earnings-summary-card {
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+          }
+          .earnings-summary-grid {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 14px;
+          }
+          .earnings-summary-grid > div {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            padding: 14px;
+            border: 1px solid var(--line);
+            border-radius: 14px;
+            background: #ffffff;
+          }
+          .earnings-summary-grid span {
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--muted);
+          }
+          .earnings-summary-grid strong {
+            font-size: 18px;
+            color: var(--ink);
+            white-space: nowrap;
+          }
+          @media (max-width: 640px) {
+            .earnings-summary-grid {
+              grid-template-columns: 1fr;
+            }
+          }
+        `}</style>
       </section>
     </main>
   );

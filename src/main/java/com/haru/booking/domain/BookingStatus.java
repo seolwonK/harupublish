@@ -3,5 +3,6 @@ package com.haru.booking.domain;
 public enum BookingStatus {
     RESERVED,
     CANCELLED,
-    COMPLETED
+    COMPLETED,
+    NO_SHOW
 }

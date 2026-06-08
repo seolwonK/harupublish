@@ -10,6 +10,7 @@ uploads/
 .vscode/
 bin/
 tmp/
+.claude/
 
 *.tsbuildinfo
 token.txt

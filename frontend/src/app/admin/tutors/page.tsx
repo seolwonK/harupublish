@@ -1,9 +1,14 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { haruApi, TutorProfileResponse } from "../../api";
+import { haruApi, PromoWaiverResponse, TutorProfileResponse } from "../../api";
 import { useAuth } from "../../auth";
 import { ApiNotice, EmptyState, Field, Sidebar, categoryLabel, statusLabel } from "../../components";
+
+function formatWaiverUntil(value: string | null) {
+  if (!value) return "기한 없음";
+  return new Date(value).toLocaleDateString("ko-KR", { year: "numeric", month: "long", day: "numeric" });
+}
 
 export default function AdminTutorsPage() {
   const { accessToken, user } = useAuth();
@@ -12,6 +17,8 @@ export default function AdminTutorsPage() {
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [waivers, setWaivers] = useState<Record<number, PromoWaiverResponse>>({});
+  const [waiverBusyId, setWaiverBusyId] = useState<number | null>(null);
 
   const loadPendingProfiles = useCallback(async () => {
     if (!accessToken) return;
@@ -57,6 +64,34 @@ export default function AdminTutorsPage() {
       return;
     }
     await decide(profileId, action);
+  }
+
+  async function toggleWaiver(profileId: number, action: "grant" | "revoke") {
+    if (!accessToken) {
+      setError("관리자 계정으로 로그인해주세요.");
+      return;
+    }
+
+    setMessage(null);
+    setError(null);
+    setWaiverBusyId(profileId);
+    try {
+      const waiver =
+        action === "grant"
+          ? await haruApi.grantPromoWaiver(accessToken, profileId)
+          : await haruApi.revokePromoWaiver(accessToken, profileId);
+      setWaivers((current) => ({ ...current, [profileId]: waiver }));
+      setMessage(
+        action === "grant"
+          ? `튜터 #${profileId} 수수료 면제를 부여했습니다.`
+          : `튜터 #${profileId} 수수료 면제를 회수했습니다.`
+      );
+    } catch (err) {
+      // 한도 초과 등 백엔드 거절은 ApiNotice 에러로 표시.
+      setError(err instanceof Error ? err.message : "수수료 면제 처리에 실패했습니다.");
+    } finally {
+      setWaiverBusyId(null);
+    }
   }
 
   return (
@@ -128,6 +163,36 @@ export default function AdminTutorsPage() {
                 <button className="ghost-button" onClick={() => void decide(profile.id, "reject")}>
                   반려
                 </button>
+                {(() => {
+                  const waiver = waivers[profile.id];
+                  const granted = waiver?.granted ?? false;
+                  return (
+                    <div className="waiver-control">
+                      {waiver ? (
+                        <span className={granted ? "waiver-status waiver-status-on" : "waiver-status"}>
+                          {granted ? `면제 적용 · ${formatWaiverUntil(waiver.waiverUntil)}까지` : "면제 회수됨"}
+                        </span>
+                      ) : null}
+                      {granted ? (
+                        <button
+                          className="ghost-button"
+                          onClick={() => void toggleWaiver(profile.id, "revoke")}
+                          disabled={waiverBusyId === profile.id}
+                        >
+                          수수료 면제 회수
+                        </button>
+                      ) : (
+                        <button
+                          className="secondary-button"
+                          onClick={() => void toggleWaiver(profile.id, "grant")}
+                          disabled={waiverBusyId === profile.id}
+                        >
+                          수수료 면제 부여
+                        </button>
+                      )}
+                    </div>
+                  );
+                })()}
               </div>
             </article>
           ))}

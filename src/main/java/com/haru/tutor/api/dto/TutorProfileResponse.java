@@ -22,6 +22,10 @@ public record TutorProfileResponse(
         List<String> availableLanguages,
         BigDecimal lessonPrice25Amount,
         BigDecimal lessonPrice50Amount,
+        // Student-facing 25-min price = lessonPrice25Amount * (1 + studentFeeRate),
+        // HALF_UP scale 2 (#9). Display value only — the authoritative price is the
+        // checkout response. May be null if no fee policy is configured.
+        BigDecimal studentPrice25Amount,
         String availableTimeNote,
         String paymentMethod,
         TutorProfileStatus status,
@@ -33,6 +37,10 @@ public record TutorProfileResponse(
 ) {
 
     public static TutorProfileResponse from(TutorProfile profile) {
+        return from(profile, null);
+    }
+
+    public static TutorProfileResponse from(TutorProfile profile, BigDecimal studentPrice25Amount) {
         return new TutorProfileResponse(
                 profile.getId(),
                 profile.getUser().getId(),
@@ -47,6 +55,7 @@ public record TutorProfileResponse(
                 profile.getAvailableLanguages(),
                 profile.getLessonPrice25Amount(),
                 profile.getLessonPrice50Amount(),
+                studentPrice25Amount,
                 profile.getAvailableTimeNote(),
                 profile.getPaymentMethod(),
                 profile.getStatus(),

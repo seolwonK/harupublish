@@ -50,6 +50,8 @@ export type ExpertListResponse = {
   availableLanguages: string[] | null;
   lessonPrice25Amount: number | string | null;
   lessonPrice50Amount: number | string | null;
+  /** 카탈로그 학생 표시가 (= lessonPrice25Amount * (1 + studentFeeRate), HALF_UP scale2). 표시 전용, 권위 가격은 checkout. */
+  studentPrice25Amount: number | string | null;
   averageRating: number | null;
   reviewCount: number | null;
 };
@@ -68,6 +70,8 @@ export type TutorProfileResponse = {
   availableLanguages: string[] | null;
   lessonPrice25Amount: number | string | null;
   lessonPrice50Amount: number | string | null;
+  /** 학생 표시가 (= lessonPrice25Amount * (1 + studentFeeRate), HALF_UP scale2). 표시 전용, 권위 가격은 checkout. */
+  studentPrice25Amount: number | string | null;
   availableTimeNote: string | null;
   paymentMethod: string | null;
   status: TutorProfileStatus;
@@ -170,6 +174,12 @@ export type PaymentResponse = {
   studentFeeAmount: number | string;
   totalAmount: number | string;
   currency: string;
+  /** 결제 표시 통화 스냅샷 (모델1: 진실원장 USD, 표시 파생). */
+  displayCurrency: string | null;
+  /** 적용된 학생 마크업 요율 스냅샷 (예: 0.10). "10% 포함" 캡션 산출에 사용. */
+  appliedStudentFeeRate: number | string | null;
+  /** 결제 시점 USD->displayCurrency 환율 스냅샷 (없으면 null). */
+  fxRateUsed: number | string | null;
   paymentMethod: PaymentMethod;
   status: PaymentStatus;
   refundReason: string | null;
@@ -186,13 +196,238 @@ export type PaymentListResponse = {
   payments: PaymentResponse[];
 };
 
+/** 관리자 환불 승인 큐: REFUND_REQUESTED 상태 결제 1건 (GET /api/admin/payments/refund-requests). */
+export type RefundRequestResponse = {
+  id: number;
+  studentUserId: number;
+  tutorProfileId: number;
+  totalAmount: number | string;
+  currency: string;
+  refundReason: string | null;
+  createdAt: string;
+};
+
+// ── 머니 코어: 플랫폼 설정 / 프로모 / 정산 / 인출 / 크레딧 / 환율 계약 (docs §8 기준) ──
+
+export type PlatformSettingsResponse = {
+  id: number;
+  studentFeeRate: number | string;
+  platformFeeRate: number | string;
+  fivePackDiscountRate: number | string;
+  tenPackDiscountRate: number | string;
+  withdrawalFeeRatePaypal: number | string;
+  withdrawalFeeRatePayoneer: number | string;
+  withdrawalFeeRateDomestic: number | string;
+  /** 프로모 면제 강사도 차감되는 고정 인출 수수료율 (예: 0.05). */
+  promoWithdrawalFeeRate: number | string;
+  cancellationCutoffHours: number;
+  creditExpiryMonths: number;
+  updatedAt: string;
+  updatedBy: number | null;
+};
+
+export type UpdatePlatformSettingsRequest = {
+  studentFeeRate: number;
+  platformFeeRate: number;
+  fivePackDiscountRate: number;
+  tenPackDiscountRate: number;
+  withdrawalFeeRatePaypal: number;
+  withdrawalFeeRatePayoneer: number;
+  withdrawalFeeRateDomestic: number;
+  promoWithdrawalFeeRate: number;
+  cancellationCutoffHours: number;
+  creditExpiryMonths: number;
+};
+
+export type PromoWaiverResponse = {
+  id: number;
+  tutorProfileId: number;
+  granted: boolean;
+  /** 프로모 면제 종료일 (예: 2026-12-31). */
+  waiverUntil: string | null;
+  grantedAt: string | null;
+  revokedAt: string | null;
+  note: string | null;
+};
+
+export type TutorEarningsResponse = {
+  tutorProfileId: number;
+  currency: string;
+  /** 적립된 사이버머니 총액 (USD 액면, 15% 차감 후). */
+  totalEarnedAmount: number | string;
+  /** 인출 HOLD/완료로 차감된 누적액. */
+  totalWithdrawnAmount: number | string;
+  /** 인출 가능한 현재 잔액. */
+  availableBalanceAmount: number | string;
+  /** 인출 진행 중(HOLD) 금액. */
+  pendingWithdrawalAmount: number | string;
+  ledger: TutorEarningLedgerEntry[];
+};
+
+export type TutorEarningLedgerEntry = {
+  id: number;
+  bookingId: number | null;
+  withdrawalId: number | null;
+  entryType: string;
+  amount: number | string;
+  balanceAfter: number | string;
+  currency: string;
+  memo: string | null;
+  createdAt: string;
+};
+
+export type WithdrawalMethod = "PAYPAL" | "PAYONEER" | "DOMESTIC_BANK";
+export type WithdrawalStatus = "REQUESTED" | "APPROVED" | "PAID" | "REJECTED" | "REVERSED";
+
+export type WithdrawalResponse = {
+  id: number;
+  tutorProfileId: number;
+  method: WithdrawalMethod;
+  /** 인출 요청 총액 (USD 액면). */
+  requestedAmount: number | string;
+  /** 적용 인출 수수료율 (PayPal/Payoneer 0.03, 국내 0.05). */
+  feeRate: number | string;
+  feeAmount: number | string;
+  /** 실제 지급액 = requestedAmount - feeAmount. */
+  netAmount: number | string;
+  currency: string;
+  status: WithdrawalStatus;
+  payoutAccount: string | null;
+  rejectReason: string | null;
+  promoPaybackPending: boolean;
+  requestedAt: string;
+  approvedAt: string | null;
+  paidAt: string | null;
+  rejectedAt: string | null;
+};
+
+export type CreateWithdrawalRequest = {
+  method: WithdrawalMethod;
+  amount: number;
+  payoutAccount: string;
+};
+
+export type WithdrawalListResponse = {
+  withdrawals: WithdrawalResponse[];
+};
+
+export type SettlementStatus = "OPEN" | "CLOSED" | "FINALIZED" | "PAID";
+
+export type MonthlySettlementResponse = {
+  id: number;
+  tutorProfileId: number;
+  year: number;
+  month: number;
+  /** 튜터 gross 합계 (= discounted 합). */
+  grossAmount: number | string;
+  /** 플랫폼 수수료 합계 (15%). */
+  platformFeeAmount: number | string;
+  /** 튜터 순수익 합계 (85%). */
+  netAmount: number | string;
+  lessonCount: number;
+  currency: string;
+  status: SettlementStatus;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type SettlementListResponse = {
+  settlements: MonthlySettlementResponse[];
+};
+
+export type UpdateSettlementStatusRequest = {
+  status: SettlementStatus;
+};
+
+export type HaruCreditLedgerEntry = {
+  id: number;
+  entryType: string;
+  amount: number | string;
+  balanceAfter: number | string;
+  currency: string;
+  paymentId: number | null;
+  memo: string | null;
+  createdAt: string;
+};
+
+export type HaruCreditResponse = {
+  accountId: number;
+  studentUserId: number;
+  currency: string;
+  /** 사용 가능한 크레딧 잔액 (USD 고정). */
+  balanceAmount: number | string;
+  /** 계정 12개월 비활성 기준 만료 예정일. */
+  expiresAt: string | null;
+  ledger: HaruCreditLedgerEntry[];
+};
+
+export type ExchangeRateResponse = {
+  base: string;
+  quote: string;
+  rate: number | string;
+  source: string | null;
+  capturedAt: string;
+};
+
 export type SessionTokens = {
   accessToken: string;
   refreshToken: string;
 };
 
+// ── 채팅 ──
+
+export type ChatRoomType = "DIRECT" | "SYSTEM_NOTICE" | "OPS";
+export type ChatMessageType = "TEXT" | "IMAGE" | "FILE" | "SYSTEM";
+
+export type ChatRoomSummary = {
+  id: number;
+  roomType: ChatRoomType;
+  counterpartUserId: number | null;
+  counterpartName: string;
+  counterpartImageUrl: string | null;
+  lastMessagePreview: string | null;
+  lastMessageAt: string | null;
+  unreadCount: number;
+  /** 상대가 어디까지 읽었는지 — 내 메시지 '읽음' 표시용 (시스템 방은 null). */
+  counterpartLastReadMessageId: number | null;
+};
+
+export type ChatRoomListResponse = {
+  rooms: ChatRoomSummary[];
+};
+
+export type ChatMessageResponse = {
+  id: number;
+  chatRoomId: number;
+  senderUserId: number | null;
+  senderName: string;
+  messageType: ChatMessageType;
+  body: string | null;
+  attachmentUrl: string | null;
+  attachmentName: string | null;
+  attachmentContentType: string | null;
+  attachmentSize: number | null;
+  createdAt: string;
+};
+
+export type ChatMessageListResponse = {
+  messages: ChatMessageResponse[];
+  hasMore: boolean;
+};
+
+/** STOMP 토픽으로 수신하는 이벤트 envelope. */
+export type ChatSocketEvent = {
+  type: "MESSAGE" | "READ" | "UNREAD";
+  chatRoomId: number;
+  message?: ChatMessageResponse;
+  userId?: number;
+  lastReadMessageId?: number;
+};
+
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8080";
 const API_ORIGIN = new URL(API_BASE_URL).origin;
+/** STOMP WebSocket 엔드포인트 (백엔드 /ws-chat). */
+export const CHAT_WS_URL = `${API_ORIGIN.replace(/^http/, "ws")}/ws-chat`;
 const REQUEST_TIMEOUT_MS = 8000;
 const PUBLIC_CACHE_TTL_MS = 60_000;
 
@@ -447,8 +682,130 @@ export const haruApi = {
   },
   requestRefund(token: string, paymentId: number, reason: string) {
     return apiRequest<PaymentResponse>(`/api/payments/${paymentId}/refund-request`, { method: "POST", token, body: { reason } });
+  },
+
+  // ── 환율 (공개 GET) ──
+  getLatestExchangeRate(base = "USD", quote = "KRW") {
+    return cachedPublicRequest(`fx:${base}:${quote}`, () =>
+      apiRequest<ExchangeRateResponse>("/api/exchange-rates/latest", { query: { base, quote } })
+    );
+  },
+
+  // ── 관리자: 플랫폼 수수료/정책 설정 ──
+  getPlatformSettings(token: string) {
+    return apiRequest<PlatformSettingsResponse>("/api/admin/settings/fees", { token });
+  },
+  updatePlatformSettings(token: string, body: UpdatePlatformSettingsRequest) {
+    return apiRequest<PlatformSettingsResponse>("/api/admin/settings/fees", { method: "PUT", token, body });
+  },
+
+  // ── 관리자: 프로모 수수료 면제 (강사 10명) ──
+  grantPromoWaiver(token: string, tutorProfileId: number) {
+    return apiRequest<PromoWaiverResponse>(`/api/admin/tutors/${tutorProfileId}/promo-waiver`, {
+      method: "POST",
+      token
+    });
+  },
+  revokePromoWaiver(token: string, tutorProfileId: number) {
+    return apiRequest<PromoWaiverResponse>(`/api/admin/tutors/${tutorProfileId}/promo-waiver`, { method: "DELETE", token });
+  },
+
+  // ── 튜터 본인: 수익/인출/정산 ──
+  getMyEarnings(token: string) {
+    return apiRequest<TutorEarningsResponse>("/api/tutors/me/earnings", { token });
+  },
+  createWithdrawal(token: string, body: CreateWithdrawalRequest) {
+    return apiRequest<WithdrawalResponse>("/api/tutors/me/withdrawals", { method: "POST", token, body });
+  },
+  getMyWithdrawals(token: string) {
+    return apiRequest<WithdrawalListResponse>("/api/tutors/me/withdrawals", { token });
+  },
+  getMySettlements(token: string) {
+    return apiRequest<SettlementListResponse>("/api/tutors/me/settlements", { token });
+  },
+
+  // ── 학생 본인: Haru Credits ──
+  getMyCredits(token: string) {
+    return apiRequest<HaruCreditResponse>("/api/credits/me", { token });
+  },
+
+  // ── 관리자: 인출 관리 ──
+  getAdminWithdrawals(token: string, status?: WithdrawalStatus) {
+    return apiRequest<WithdrawalListResponse>("/api/admin/withdrawals", { token, query: { status } });
+  },
+  approveWithdrawal(token: string, withdrawalId: number) {
+    return apiRequest<WithdrawalResponse>(`/api/admin/withdrawals/${withdrawalId}/approve`, { method: "PATCH", token });
+  },
+  markWithdrawalPaid(token: string, withdrawalId: number) {
+    return apiRequest<WithdrawalResponse>(`/api/admin/withdrawals/${withdrawalId}/paid`, { method: "PATCH", token });
+  },
+  rejectWithdrawal(token: string, withdrawalId: number, reason: string) {
+    return apiRequest<WithdrawalResponse>(`/api/admin/withdrawals/${withdrawalId}/reject`, {
+      method: "PATCH",
+      token,
+      body: { reason }
+    });
+  },
+
+  // ── 관리자: 월정산 상태 전이 ──
+  updateSettlementStatus(token: string, settlementId: number, status: SettlementStatus) {
+    return apiRequest<MonthlySettlementResponse>(`/api/admin/settlements/${settlementId}/status`, {
+      method: "PATCH",
+      token,
+      body: { status }
+    });
+  },
+
+  // ── 관리자: 환불 요청 큐 / 환불 승인 -> Haru Credits 발급 ──
+  getRefundRequests(token: string) {
+    return apiRequest<RefundRequestResponse[]>("/api/admin/payments/refund-requests", { token });
+  },
+  approveRefund(token: string, paymentId: number) {
+    return apiRequest<PaymentResponse>(`/api/admin/payments/${paymentId}/refund-approve`, { method: "POST", token });
+  },
+
+  // ── 채팅 ──
+  startChat(token: string, tutorProfileId: number) {
+    return apiRequest<ChatRoomSummary>("/api/chats", { method: "POST", token, body: { tutorProfileId } });
+  },
+  listChats(token: string) {
+    return apiRequest<ChatRoomListResponse>("/api/chats", { token });
+  },
+  getChatMessages(token: string, chatRoomId: number, params?: { beforeId?: number; size?: number }) {
+    return apiRequest<ChatMessageListResponse>(`/api/chats/${chatRoomId}/messages`, {
+      token,
+      query: { beforeId: params?.beforeId, size: params?.size }
+    });
+  },
+  sendChatMessage(token: string, chatRoomId: number, body: string) {
+    return apiRequest<ChatMessageResponse>(`/api/chats/${chatRoomId}/messages`, { method: "POST", token, body: { body } });
+  },
+  markChatRead(token: string, chatRoomId: number, lastMessageId: number) {
+    return apiRequest<void>(`/api/chats/${chatRoomId}/read`, { method: "POST", token, body: { lastMessageId } });
+  },
+  uploadChatAttachment(token: string, chatRoomId: number, file: File) {
+    const formData = new FormData();
+    formData.append("file", file);
+    return apiUpload<ChatMessageResponse>(`/api/chats/${chatRoomId}/attachments`, token, formData);
+  },
+  getChatUnreadCount(token: string) {
+    return apiRequest<{ count: number }>("/api/chats/unread-count", { token });
   }
 };
+
+/**
+ * 카탈로그 학생 표시가 해석기. 백엔드 studentPrice25Amount(권장)를 쓰고,
+ * 아직 없으면 lessonPrice25Amount로 폴백한다. (표시 전용 — 권위 가격은 checkout 응답.)
+ */
+export function resolveStudentPrice25(
+  tutor: Pick<ExpertListResponse, "studentPrice25Amount" | "lessonPrice25Amount">
+): number | string | null {
+  const student = tutor.studentPrice25Amount;
+  if (student !== null && student !== undefined && student !== "" && Number.isFinite(Number(student))) {
+    return student;
+  }
+  return tutor.lessonPrice25Amount;
+}
 
 export function toMoney(value: number | string | null | undefined) {
   if (value === null || value === undefined || value === "") return "$0.00";
@@ -460,6 +817,49 @@ export function toMoney(value: number | string | null | undefined) {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2
   }).format(amount);
+}
+
+export type FormatMoneyOptions = {
+  /** 표시 통화. KRW면 fxRate로 환산해 표시. 기본 USD. */
+  currency?: "USD" | "KRW";
+  /** USD->KRW 환율. KRW 표시인데 없으면 USD로 폴백. */
+  fxRate?: number | null;
+};
+
+/**
+ * 진실 원장 USD 값을 표시 통화로 포맷한다.
+ * - currency 'USD' (기본): "$1,234.56"
+ * - currency 'KRW' + fxRate: 환산 후 원화(소수 없음). fxRate 누락 시 USD로 폴백.
+ * - 사이버머니/Haru Credits/정산 잔액은 항상 USD로 호출(통화토글 무시) — 호출부에서 currency 미지정.
+ */
+export function formatMoney(usdValue: number | string | null | undefined, options: FormatMoneyOptions = {}) {
+  const { currency = "USD", fxRate } = options;
+  const usdAmount = usdValue === null || usdValue === undefined || usdValue === "" ? 0 : Number(usdValue);
+  const safeUsd = Number.isFinite(usdAmount) ? usdAmount : 0;
+
+  if (currency === "KRW" && typeof fxRate === "number" && Number.isFinite(fxRate) && fxRate > 0) {
+    return new Intl.NumberFormat("ko-KR", {
+      style: "currency",
+      currency: "KRW",
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0
+    }).format(safeUsd * fxRate);
+  }
+
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  }).format(safeUsd);
+}
+
+/** 요율(0.10)을 퍼센트 라벨("10%")로. */
+export function formatRatePercent(rate: number | string | null | undefined, fractionDigits = 0) {
+  if (rate === null || rate === undefined || rate === "") return "-";
+  const value = Number(rate);
+  if (!Number.isFinite(value)) return "-";
+  return `${(value * 100).toFixed(fractionDigits)}%`;
 }
 
 export function dateRangeFromToday(days = 30) {

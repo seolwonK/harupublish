@@ -3,8 +3,9 @@
 import { CalendarDays, CheckCircle2, Globe2, MapPin, MessageCircle, Play, ShieldCheck, Video } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, use, useEffect, useMemo, useState } from "react";
-import { dateRangeFromToday, HaruApiError, haruApi, ReviewListResponse, ScheduleSlotResponse, toMoney, TutorProfileResponse, youtubeEmbedUrl } from "../../api";
+import { dateRangeFromToday, formatMoney, HaruApiError, haruApi, ReviewListResponse, ScheduleSlotResponse, TutorProfileResponse, youtubeEmbedUrl } from "../../api";
 import { useAuth } from "../../auth";
+import { useCurrency } from "../../currency";
 import { clearPendingBookingIntent, writePendingBookingIntent } from "../../booking-intent";
 import { ApiNotice, AppHeader, Avatar, Badge, Button, categoryLabel, EmptyState, IconMeta, Rating, SectionHeader, TimePill, TutorPortrait } from "../../components";
 import { tutors } from "../../data";
@@ -23,6 +24,8 @@ function TutorProfilePageContent({ params }: { params: Promise<{ id: string }> }
   const router = useRouter();
   const searchParams = useSearchParams();
   const { accessToken } = useAuth();
+  const { displayCurrency, fxRate } = useCurrency();
+  const money = (value: number | string | null | undefined) => formatMoney(value, { currency: displayCurrency, fxRate });
   const [tutor, setTutor] = useState<TutorProfileResponse | null>(null);
   const [slots, setSlots] = useState<ScheduleSlotResponse[]>([]);
   const [reviewSummary, setReviewSummary] = useState<ReviewListResponse | null>(null);
@@ -88,7 +91,14 @@ function TutorProfilePageContent({ params }: { params: Promise<{ id: string }> }
     () => slots.filter((slot) => !selectedDate || formatDate(slot.startAt) === selectedDate),
     [selectedDate, slots]
   );
-  const unitPrice = tutor?.lessonPrice25Amount;
+  // 학생 표시가는 백엔드 studentPrice25Amount(= F × (1 + studentFeeRate), HALF_UP scale2)를 사용한다.
+  // 표시 전용 값이며 권위 가격은 checkout 응답. 백엔드 값이 없으면 튜터 단가로 폴백.
+  const studentDisplayPrice = useMemo(() => {
+    const student = Number(tutor?.studentPrice25Amount ?? NaN);
+    if (Number.isFinite(student) && student > 0) return student;
+    const base = Number(tutor?.lessonPrice25Amount ?? 0);
+    return Number.isFinite(base) && base > 0 ? base : 0;
+  }, [tutor?.studentPrice25Amount, tutor?.lessonPrice25Amount]);
 
   function loginRedirectTarget() {
     const slotSuffix = selectedSlotId ? `?slot=${selectedSlotId}` : "";
@@ -333,9 +343,12 @@ function TutorProfilePageContent({ params }: { params: Promise<{ id: string }> }
           {slots.length === 0 ? <EmptyState title="예약 가능한 시간이 없습니다" body="튜터가 공개 일정을 등록하면 예약할 수 있습니다." /> : null}
 
           <div className="booking-total">
-            <span>예상 금액</span>
-            <strong>{toMoney(unitPrice)}</strong>
+            <span>결제 금액 (25분 1회)</span>
+            <strong>{money(studentDisplayPrice)}</strong>
           </div>
+          <p className="fee-caption fee-caption-tight">
+            <ShieldCheck size={13} /> 수수료 포함 단일가 · 추가 결제 없음
+          </p>
 
           <Button className="wide booking-primary-cta" onClick={() => void payAndBook()} disabled={actionLoading || !selectedSlotId || Boolean(selectedSlot?.booked) || createdBookingId !== null}>
             <CheckCircle2 size={16} /> {actionLoading ? "진행 중..." : "Lemon Squeezy로 결제 및 예약"}

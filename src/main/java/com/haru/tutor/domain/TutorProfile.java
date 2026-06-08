@@ -23,6 +23,9 @@ import java.util.List;
 @Table(name = "tutor_profiles")
 public class TutorProfile {
 
+    /** Truth-ledger / default pricing currency. KRW etc. are display-only. */
+    public static final String BASE_CURRENCY = "USD";
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
@@ -64,6 +67,24 @@ public class TutorProfile {
 
     @Column(name = "lesson_price_50_amount", precision = 10, scale = 2)
     private BigDecimal lessonPrice50Amount;
+
+    /**
+     * Currency the tutor entered their price in. Truth ledger is USD, so this is
+     * the input/display currency only.
+     */
+    @Column(name = "price_currency", length = 3)
+    private String priceCurrency;
+
+    /**
+     * USD snapshots of the lesson prices captured at registration time so later
+     * FX moves never reprice an existing offer. For now the platform prices in
+     * USD directly, so these mirror the entered amount.
+     */
+    @Column(name = "lesson_price_25_usd_amount", precision = 10, scale = 2)
+    private BigDecimal lessonPrice25UsdAmount;
+
+    @Column(name = "lesson_price_50_usd_amount", precision = 10, scale = 2)
+    private BigDecimal lessonPrice50UsdAmount;
 
     @Column(name = "available_time_note", length = 500)
     private String availableTimeNote;
@@ -134,6 +155,11 @@ public class TutorProfile {
         this.availableLanguages = joinLanguages(availableLanguages);
         this.lessonPrice25Amount = lessonPrice25Amount;
         this.lessonPrice50Amount = lessonPrice50Amount;
+        // Truth ledger is USD. The platform prices directly in USD for now, so
+        // snapshot the entered amounts as the USD figures and stamp the currency.
+        this.priceCurrency = BASE_CURRENCY;
+        this.lessonPrice25UsdAmount = lessonPrice25Amount;
+        this.lessonPrice50UsdAmount = lessonPrice50Amount;
         this.availableTimeNote = availableTimeNote;
         this.paymentMethod = paymentMethod;
         if (status == TutorProfileStatus.REJECTED || status == TutorProfileStatus.APPROVED) {
@@ -284,6 +310,18 @@ public class TutorProfile {
 
     public BigDecimal getLessonPrice50Amount() {
         return lessonPrice50Amount;
+    }
+
+    public String getPriceCurrency() {
+        return priceCurrency;
+    }
+
+    public BigDecimal getLessonPrice25UsdAmount() {
+        return lessonPrice25UsdAmount;
+    }
+
+    public BigDecimal getLessonPrice50UsdAmount() {
+        return lessonPrice50UsdAmount;
     }
 
     public String getAvailableTimeNote() {

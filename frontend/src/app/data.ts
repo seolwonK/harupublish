@@ -31,7 +31,7 @@ export const tutors: Tutor[] = [
     price: "25분 USD 13",
     location: "서울, 한국",
     avatar: "JH",
-    accent: "from-amber-50 to-rose-50"
+    accent: "from-violet-50 to-purple-100"
   },
   {
     id: "park-joon-ho",
@@ -43,7 +43,7 @@ export const tutors: Tutor[] = [
     price: "50분 USD 25",
     location: "부산, 한국",
     avatar: "JH",
-    accent: "from-sky-50 to-emerald-50"
+    accent: "from-indigo-50 to-violet-100"
   },
   {
     id: "choi-in-seo",
@@ -55,7 +55,7 @@ export const tutors: Tutor[] = [
     price: "25분 USD 13",
     location: "인천, 한국",
     avatar: "IS",
-    accent: "from-lime-50 to-yellow-50"
+    accent: "from-purple-50 to-fuchsia-100"
   },
   {
     id: "jung-woo-jin",
@@ -67,7 +67,7 @@ export const tutors: Tutor[] = [
     price: "25분 USD 13",
     location: "대전, 한국",
     avatar: "WJ",
-    accent: "from-emerald-50 to-teal-50"
+    accent: "from-violet-100 to-indigo-50"
   }
 ];
 

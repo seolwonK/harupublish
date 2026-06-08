@@ -2,75 +2,21 @@
 
 import { Paperclip, Send } from "lucide-react";
 import { useSearchParams } from "next/navigation";
-import { Suspense, useEffect, useMemo, useState } from "react";
-import { ApiNotice, AppHeader, Avatar } from "../components";
+import { Fragment, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  ChatMessageResponse,
+  ChatRoomSummary,
+  ChatSocketEvent,
+  HaruApiError,
+  haruApi,
+  resolveAssetUrl
+} from "../api";
+import { useAuth } from "../auth";
+import { ApiNotice, AppHeader, Avatar, Button } from "../components";
+import { useChatSocket } from "./useChatSocket";
 
-type ChatMessage = {
-  id: string;
-  body: string;
-  sender: "me" | "other";
-  muted?: boolean;
-  sentAt: string;
-};
-
-type ChatConversation = {
-  id: string;
-  name: string;
-  avatar: string;
-  online: boolean;
-  unread: number;
-  messages: ChatMessage[];
-};
-
-const initialConversations: ChatConversation[] = [
-  {
-    id: "tutor-jh",
-    name: "김지현 튜터",
-    avatar: "JH",
-    online: true,
-    unread: 2,
-    messages: [
-      { id: "jh-1", body: "수업이 30분 후 시작됩니다.", sender: "me", sentAt: "2026-05-22T10:02:00+09:00" },
-      { id: "jh-2", body: "오늘 수업 교재 미리 보내드려요!", sender: "other", sentAt: "2026-05-22T10:05:00+09:00" },
-      { id: "jh-3", body: "수업 일정이 변경되었습니다. 새로운 시간: 5월 24일 (금) 오후 2:00", sender: "me", muted: true, sentAt: "2026-05-22T10:09:00+09:00" },
-      { id: "jh-4", body: "네, 확인했어요!", sender: "other", sentAt: "2026-05-22T10:10:00+09:00" }
-    ]
-  },
-  {
-    id: "tutor-pjh",
-    name: "박준호 튜터",
-    avatar: "JH",
-    online: false,
-    unread: 0,
-    messages: [{ id: "pjh-1", body: "감사합니다 :)", sender: "other", sentAt: "2026-05-21T18:05:00+09:00" }]
-  },
-  {
-    id: "tutor-cis",
-    name: "최인서 튜터",
-    avatar: "IS",
-    online: false,
-    unread: 0,
-    messages: [{ id: "cis-1", body: "수업 자료 보내드릴게요.", sender: "other", sentAt: "2026-05-21T12:40:00+09:00" }]
-  },
-  {
-    id: "system-haru",
-    name: "Haru 알림",
-    avatar: "H",
-    online: false,
-    unread: 1,
-    messages: [{ id: "haru-1", body: "수업이 30분 후 시작됩니다.", sender: "other", sentAt: "2026-05-22T09:30:00+09:00" }]
-  },
-  {
-    id: "ops-team",
-    name: "운영팀",
-    avatar: "OP",
-    online: false,
-    unread: 0,
-    messages: [{ id: "ops-1", body: "문의하신 내용을 확인했습니다.", sender: "other", sentAt: "2026-05-19T16:05:00+09:00" }]
-  }
-];
-
-function formatConversationTime(value: string) {
+function formatConversationTime(value: string | null) {
+  if (!value) return "";
   const date = new Date(value);
   const now = new Date();
   const sameDay = date.toDateString() === now.toDateString();
@@ -84,93 +30,335 @@ function formatDateDivider(value: string) {
   return new Date(value).toLocaleDateString("ko-KR", { year: "numeric", month: "long", day: "numeric", weekday: "short" });
 }
 
-function messagePreview(conversation: ChatConversation) {
-  return conversation.messages[conversation.messages.length - 1]?.body ?? "대화를 시작해 보세요.";
+function formatMessageTime(value: string) {
+  return new Date(value).toLocaleTimeString("ko-KR", { hour: "numeric", minute: "2-digit" });
 }
 
-function createMessage(body: string, sender: ChatMessage["sender"], muted = false): ChatMessage {
-  return {
-    id: globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`,
-    body,
-    sender,
-    muted,
-    sentAt: new Date().toISOString()
-  };
+function roomSubtitle(room: ChatRoomSummary | null, connected: boolean) {
+  if (!room) return "";
+  if (room.roomType === "SYSTEM_NOTICE") return "시스템 알림 · 읽기 전용";
+  if (room.roomType === "OPS") return "운영팀 문의";
+  return connected ? "실시간 연결됨" : "연결 대기 중";
+}
+
+function avatarLabel(name: string) {
+  return name.trim().slice(0, 1).toUpperCase() || "H";
+}
+
+function errorMessage(error: unknown) {
+  if (error instanceof HaruApiError) return error.message;
+  return "요청을 처리하지 못했습니다. 잠시 후 다시 시도해 주세요.";
+}
+
+function MessageBubble({ message, mine }: { message: ChatMessageResponse; mine: boolean }) {
+  const classes = `bubble ${mine ? "mine" : "other"}${message.messageType === "SYSTEM" ? " soft" : ""}`;
+
+  if (message.messageType === "IMAGE" && message.attachmentUrl) {
+    return (
+      <div className={classes}>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={resolveAssetUrl(message.attachmentUrl) ?? message.attachmentUrl}
+          alt={message.attachmentName ?? "첨부 이미지"}
+          style={{ maxWidth: "240px", borderRadius: "8px", display: "block" }}
+        />
+      </div>
+    );
+  }
+  if (message.messageType === "FILE" && message.attachmentUrl) {
+    return (
+      <div className={classes}>
+        <a href={resolveAssetUrl(message.attachmentUrl) ?? message.attachmentUrl} target="_blank" rel="noreferrer">
+          📎 {message.attachmentName ?? "첨부 파일"}
+        </a>
+      </div>
+    );
+  }
+  return <div className={classes}>{message.body}</div>;
 }
 
 function ChatPageContent() {
   const searchParams = useSearchParams();
+  const { user, accessToken, loading, refreshSession } = useAuth();
+
+  const [rooms, setRooms] = useState<ChatRoomSummary[]>([]);
+  const [selectedRoomId, setSelectedRoomId] = useState<number | null>(null);
+  const [messages, setMessages] = useState<ChatMessageResponse[]>([]);
+  const [hasMore, setHasMore] = useState(false);
   const [search, setSearch] = useState("");
   const [draft, setDraft] = useState("");
-  const [notice, setNotice] = useState<string | null>("현재 채팅은 로컬 optimistic 미리보기입니다. 새로고침하면 기본 대화로 돌아갑니다.");
-  const [conversations, setConversations] = useState<ChatConversation[]>(initialConversations);
-  const [selectedConversationId, setSelectedConversationId] = useState(initialConversations[0].id);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
 
-  useEffect(() => {
-    const tutorName = searchParams.get("name")?.trim();
-    if (!tutorName) return;
+  // 상대 읽음 포인터의 실시간 갱신분 (READ 이벤트). 방 전환 시 초기화.
+  const [liveCounterpartReadId, setLiveCounterpartReadId] = useState<number | null>(null);
 
-    const tutorId = searchParams.get("tutorId")?.trim() || tutorName;
-    const conversationId = `tutor-${tutorId}`;
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const messageAreaRef = useRef<HTMLDivElement | null>(null);
+  const autoScrollRef = useRef(true);
 
-    setConversations((current) => {
-      if (current.some((conversation) => conversation.id === conversationId)) {
-        return current;
-      }
-
-      return [
-        {
-          id: conversationId,
-          name: tutorName,
-          avatar: tutorName.slice(0, 1).toUpperCase(),
-          online: true,
-          unread: 0,
-          messages: [createMessage(`${tutorName}와 새 대화를 시작했습니다. 첫 메시지를 보내보세요.`, "other")]
-        },
-        ...current
-      ];
-    });
-    setSelectedConversationId(conversationId);
-  }, [searchParams]);
-
-  const filteredConversations = useMemo(() => {
-    if (!search.trim()) return conversations;
-    const query = search.trim().toLowerCase();
-    return conversations.filter((conversation) => {
-      return conversation.name.toLowerCase().includes(query)
-        || messagePreview(conversation).toLowerCase().includes(query);
-    });
-  }, [conversations, search]);
-
-  const selectedConversation = useMemo(
-    () => conversations.find((conversation) => conversation.id === selectedConversationId) ?? conversations[0] ?? null,
-    [conversations, selectedConversationId]
+  const selectedRoom = useMemo(
+    () => rooms.find((room) => room.id === selectedRoomId) ?? null,
+    [rooms, selectedRoomId]
   );
 
-  function selectConversation(conversationId: string) {
-    setSelectedConversationId(conversationId);
-    setConversations((current) => current.map((conversation) => {
-      if (conversation.id !== conversationId) return conversation;
-      return { ...conversation, unread: 0 };
-    }));
+  const updateRoomPreview = useCallback((message: ChatMessageResponse) => {
+    setRooms((current) => {
+      const updated = current.map((room) =>
+        room.id === message.chatRoomId
+          ? {
+              ...room,
+              lastMessagePreview: message.body ?? message.attachmentName ?? "[파일]",
+              lastMessageAt: message.createdAt
+            }
+          : room
+      );
+      // 마지막 메시지가 갱신된 방을 맨 위로 올린다.
+      return [...updated].sort((a, b) => (b.lastMessageAt ?? "").localeCompare(a.lastMessageAt ?? ""));
+    });
+  }, []);
+
+  const reloadRooms = useCallback(async () => {
+    if (!accessToken) return;
+    try {
+      const list = await haruApi.listChats(accessToken);
+      setRooms(list.rooms);
+    } catch {
+      // 목록 갱신 실패는 조용히 무시한다 (다음 이벤트에서 재시도).
+    }
+  }, [accessToken]);
+
+  const handleRoomEvent = useCallback(
+    (event: ChatSocketEvent) => {
+      if (event.type === "READ") {
+        // 상대가 읽음 포인터를 옮겼다 → 내 메시지 '읽음' 표시 갱신.
+        if (event.userId !== user?.id && typeof event.lastReadMessageId === "number") {
+          const readId = event.lastReadMessageId;
+          setLiveCounterpartReadId((current) => (current === null || readId > current ? readId : current));
+        }
+        return;
+      }
+      if (event.type !== "MESSAGE" || !event.message) return;
+      const message = event.message;
+      setMessages((current) => (current.some((existing) => existing.id === message.id) ? current : [...current, message]));
+      updateRoomPreview(message);
+      // 보고 있는 방에 도착한 상대 메시지는 즉시 읽음 처리한다.
+      if (message.senderUserId !== user?.id && accessToken) {
+        void haruApi.markChatRead(accessToken, message.chatRoomId, message.id).catch(() => undefined);
+      }
+    },
+    [accessToken, updateRoomPreview, user?.id]
+  );
+
+  const handleUnreadEvent = useCallback(
+    (event: ChatSocketEvent) => {
+      if (event.chatRoomId === selectedRoomId) return;
+      const message = event.message;
+      setRooms((current) => {
+        // 목록에 없는 새 방이면 전체 목록을 다시 불러온다.
+        if (!current.some((room) => room.id === event.chatRoomId)) {
+          void reloadRooms();
+          return current;
+        }
+        // 알고 있는 방이면 리페치 없이 미읽음 수와 미리보기만 제자리 갱신.
+        const updated = current.map((room) =>
+          room.id === event.chatRoomId
+            ? {
+                ...room,
+                unreadCount: room.unreadCount + 1,
+                lastMessagePreview: message ? (message.body ?? message.attachmentName ?? "[파일]") : room.lastMessagePreview,
+                lastMessageAt: message?.createdAt ?? room.lastMessageAt
+              }
+            : room
+        );
+        return [...updated].sort((a, b) => (b.lastMessageAt ?? "").localeCompare(a.lastMessageAt ?? ""));
+      });
+    },
+    [reloadRooms, selectedRoomId]
+  );
+
+  const { connected } = useChatSocket({
+    accessToken,
+    roomId: selectedRoomId,
+    onRoomEvent: handleRoomEvent,
+    onUnreadEvent: handleUnreadEvent,
+    refreshToken: refreshSession
+  });
+
+  // 최초 진입: (튜터 상세에서 넘어온 경우) 방 생성 후 목록 로드.
+  useEffect(() => {
+    if (!accessToken) return;
+    let cancelled = false;
+
+    (async () => {
+      try {
+        let targetRoomId: number | null = null;
+        const tutorIdParam = searchParams.get("tutorId")?.trim();
+        if (tutorIdParam && /^\d+$/.test(tutorIdParam)) {
+          const room = await haruApi.startChat(accessToken, Number(tutorIdParam));
+          targetRoomId = room.id;
+        }
+        const list = await haruApi.listChats(accessToken);
+        if (cancelled) return;
+        setRooms(list.rooms);
+        setSelectedRoomId((current) => current ?? targetRoomId ?? list.rooms[0]?.id ?? null);
+      } catch (error) {
+        if (!cancelled) setNotice(errorMessage(error));
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [accessToken, searchParams]);
+
+  // 방 선택: 메시지 로드 + 읽음 처리.
+  useEffect(() => {
+    if (!accessToken || selectedRoomId === null) return;
+    let cancelled = false;
+    setMessages([]);
+    setHasMore(false);
+    setLiveCounterpartReadId(null);
+    autoScrollRef.current = true;
+
+    haruApi
+      .getChatMessages(accessToken, selectedRoomId)
+      .then((response) => {
+        if (cancelled) return;
+        setMessages(response.messages);
+        setHasMore(response.hasMore);
+        const last = response.messages[response.messages.length - 1];
+        if (last) {
+          void haruApi.markChatRead(accessToken, selectedRoomId, last.id).catch(() => undefined);
+        }
+        setRooms((current) => current.map((room) => (room.id === selectedRoomId ? { ...room, unreadCount: 0 } : room)));
+      })
+      .catch((error) => {
+        if (!cancelled) setNotice(errorMessage(error));
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [accessToken, selectedRoomId]);
+
+  // 새 메시지 도착 시 맨 아래로 스크롤 (이전 메시지 로드는 제외).
+  useEffect(() => {
+    if (!autoScrollRef.current) {
+      autoScrollRef.current = true;
+      return;
+    }
+    const area = messageAreaRef.current;
+    if (area) area.scrollTop = area.scrollHeight;
+  }, [messages]);
+
+  const filteredRooms = useMemo(() => {
+    if (!search.trim()) return rooms;
+    const query = search.trim().toLowerCase();
+    return rooms.filter(
+      (room) =>
+        room.counterpartName.toLowerCase().includes(query) ||
+        (room.lastMessagePreview ?? "").toLowerCase().includes(query)
+    );
+  }, [rooms, search]);
+
+  // 상대 읽음 포인터 = 방 목록 스냅샷 vs 실시간 READ 이벤트 중 더 최신 값.
+  const counterpartReadId = Math.max(liveCounterpartReadId ?? 0, selectedRoom?.counterpartLastReadMessageId ?? 0);
+
+  // '읽음' 라벨은 상대가 읽은 내 메시지 중 마지막 하나에만 붙인다.
+  const lastReadMineId = useMemo(() => {
+    let last: number | null = null;
+    for (const message of messages) {
+      if (message.senderUserId === user?.id && message.id > 0 && message.id <= counterpartReadId) {
+        last = message.id;
+      }
+    }
+    return last;
+  }, [messages, counterpartReadId, user?.id]);
+
+  async function loadOlderMessages() {
+    if (!accessToken || selectedRoomId === null || messages.length === 0) return;
+    autoScrollRef.current = false;
+    try {
+      const response = await haruApi.getChatMessages(accessToken, selectedRoomId, { beforeId: messages[0].id });
+      setMessages((current) => [...response.messages, ...current]);
+      setHasMore(response.hasMore);
+    } catch (error) {
+      setNotice(errorMessage(error));
+    }
   }
 
-  function sendMessage() {
+  async function sendMessage() {
     const content = draft.trim();
-    if (!content || !selectedConversation) return;
+    if (!content || !accessToken || !selectedRoom || selectedRoom.roomType === "SYSTEM_NOTICE") return;
 
-    const outgoingMessage = createMessage(content, "me");
-    setConversations((current) => current.map((conversation) => {
-      if (conversation.id !== selectedConversation.id) return conversation;
-      return {
-        ...conversation,
-        unread: 0,
-        messages: [...conversation.messages, outgoingMessage]
-      };
-    }));
     setDraft("");
-    setNotice("메시지를 화면에 바로 반영했습니다. 현재 단계에서는 브라우저 로컬 상태에만 유지됩니다.");
+    setNotice(null);
+    const tempId = -Date.now();
+    const optimistic: ChatMessageResponse = {
+      id: tempId,
+      chatRoomId: selectedRoom.id,
+      senderUserId: user?.id ?? null,
+      senderName: user?.name ?? "나",
+      messageType: "TEXT",
+      body: content,
+      attachmentUrl: null,
+      attachmentName: null,
+      attachmentContentType: null,
+      attachmentSize: null,
+      createdAt: new Date().toISOString()
+    };
+    setMessages((current) => [...current, optimistic]);
+
+    try {
+      const saved = await haruApi.sendChatMessage(accessToken, selectedRoom.id, content);
+      setMessages((current) => {
+        const withoutTemp = current.filter((message) => message.id !== tempId);
+        return withoutTemp.some((message) => message.id === saved.id) ? withoutTemp : [...withoutTemp, saved];
+      });
+      updateRoomPreview(saved);
+    } catch (error) {
+      setMessages((current) => current.filter((message) => message.id !== tempId));
+      setDraft(content);
+      setNotice(errorMessage(error));
+    }
   }
+
+  async function handleFileSelected(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file || !accessToken || !selectedRoom || selectedRoom.roomType === "SYSTEM_NOTICE") return;
+
+    setUploading(true);
+    setNotice(null);
+    try {
+      const saved = await haruApi.uploadChatAttachment(accessToken, selectedRoom.id, file);
+      setMessages((current) => (current.some((message) => message.id === saved.id) ? current : [...current, saved]));
+      updateRoomPreview(saved);
+    } catch (error) {
+      setNotice(errorMessage(error));
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  if (!loading && !accessToken) {
+    return (
+      <>
+        <AppHeader />
+        <main className="chat-layout">
+          <section className="chat-empty">
+            <ApiNotice type="info">채팅을 사용하려면 로그인이 필요합니다.</ApiNotice>
+            <Button as="a" href="/login">
+              로그인하러 가기
+            </Button>
+          </section>
+        </main>
+      </>
+    );
+  }
+
+  const readOnlyRoom = selectedRoom?.roomType === "SYSTEM_NOTICE";
 
   return (
     <>
@@ -178,61 +366,92 @@ function ChatPageContent() {
       <main className="chat-layout">
         <aside className="chat-list">
           <label className="search-box">
-            <input placeholder="튜터, 주제, 언어 검색" value={search} onChange={(event) => setSearch(event.target.value)} />
+            <input placeholder="튜터, 메시지 검색" value={search} onChange={(event) => setSearch(event.target.value)} />
           </label>
-          {filteredConversations.map((chat) => (
-            <article className={chat.id === selectedConversation?.id ? "conversation selected" : "conversation"} key={chat.id} onClick={() => selectConversation(chat.id)}>
-              <Avatar label={chat.avatar} />
+          {filteredRooms.map((room) => (
+            <article
+              className={room.id === selectedRoomId ? "conversation selected" : "conversation"}
+              key={room.id}
+              onClick={() => setSelectedRoomId(room.id)}
+            >
+              <Avatar label={avatarLabel(room.counterpartName)} imageUrl={room.counterpartImageUrl} />
               <div>
-                <strong>{chat.name}</strong>
-                <p>{messagePreview(chat)}</p>
+                <strong>{room.counterpartName}</strong>
+                <p>{room.lastMessagePreview ?? "대화를 시작해 보세요."}</p>
               </div>
               <div className="conversation-meta">
-                <span>{formatConversationTime(chat.messages[chat.messages.length - 1]?.sentAt ?? new Date().toISOString())}</span>
-                {chat.unread ? <b>{chat.unread}</b> : null}
+                <span>{formatConversationTime(room.lastMessageAt)}</span>
+                {room.unreadCount ? <b>{room.unreadCount}</b> : null}
               </div>
             </article>
           ))}
-          {filteredConversations.length === 0 ? <ApiNotice type="info">검색 조건에 맞는 대화가 없습니다.</ApiNotice> : null}
+          {filteredRooms.length === 0 ? <ApiNotice type="info">대화가 없습니다. 튜터 프로필에서 메시지를 보내보세요.</ApiNotice> : null}
         </aside>
 
         <section className="chat-room">
           <header className="chat-head">
-            <Avatar label={selectedConversation?.avatar ?? "H"} />
+            <Avatar label={avatarLabel(selectedRoom?.counterpartName ?? "H")} imageUrl={selectedRoom?.counterpartImageUrl} />
             <div>
-              <h1>{selectedConversation?.name ?? "대화를 선택해 주세요"}</h1>
-              <p>{selectedConversation?.online ? "온라인" : "오프라인"}</p>
+              <h1>{selectedRoom?.counterpartName ?? "대화를 선택해 주세요"}</h1>
+              <p>{roomSubtitle(selectedRoom, connected)}</p>
             </div>
             <span>한국 시간 {new Date().toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" })}</span>
           </header>
-          {notice ? <ApiNotice type="info">{notice}</ApiNotice> : null}
-          <div className="message-area">
-            {selectedConversation?.messages.map((message, index) => {
-              const previous = selectedConversation.messages[index - 1];
-              const showDivider = !previous || formatDateDivider(previous.sentAt) !== formatDateDivider(message.sentAt);
+          {notice ? <ApiNotice type="error">{notice}</ApiNotice> : null}
+          <div className="message-area" ref={messageAreaRef}>
+            {hasMore ? (
+              <button type="button" className="date-divider" style={{ cursor: "pointer", border: "none" }} onClick={loadOlderMessages}>
+                이전 메시지 보기
+              </button>
+            ) : null}
+            {messages.map((message, index) => {
+              const previous = messages[index - 1];
+              const showDivider = !previous || formatDateDivider(previous.createdAt) !== formatDateDivider(message.createdAt);
+              const mine = message.senderUserId !== null && message.senderUserId === user?.id;
 
               return (
-                <div key={message.id}>
-                  {showDivider ? <span className="date-divider">{formatDateDivider(message.sentAt)}</span> : null}
-                  <div className={`bubble ${message.sender === "me" ? "mine" : "other"}${message.muted ? " soft" : ""}`}>{message.body}</div>
-                </div>
+                <Fragment key={message.id}>
+                  {showDivider ? <span className="date-divider">{formatDateDivider(message.createdAt)}</span> : null}
+                  <div className={`message-row ${mine ? "mine" : "other"}`}>
+                    <MessageBubble message={message} mine={mine} />
+                    <div className="message-meta">
+                      {mine && message.id === lastReadMineId ? <span className="message-read">읽음</span> : null}
+                      <span className="message-time">{formatMessageTime(message.createdAt)}</span>
+                    </div>
+                  </div>
+                </Fragment>
               );
             })}
           </div>
           <footer className="chat-input">
             <input
-              placeholder="메시지를 입력하세요..."
+              placeholder={readOnlyRoom ? "이 채팅방은 읽기 전용입니다." : "메시지를 입력하세요..."}
               value={draft}
+              disabled={readOnlyRoom || !selectedRoom}
               onChange={(event) => setDraft(event.target.value)}
               onKeyDown={(event) => {
                 if (event.key === "Enter" && !event.shiftKey) {
                   event.preventDefault();
-                  sendMessage();
+                  void sendMessage();
                 }
               }}
             />
-            <Paperclip size={18} aria-hidden />
-            <button className="send-button" aria-label="메시지 보내기" onClick={sendMessage} disabled={!draft.trim() || !selectedConversation}>
+            <input ref={fileInputRef} type="file" hidden onChange={handleFileSelected} accept="image/*,.pdf,.txt,.zip,.doc,.docx,.xls,.xlsx,.ppt,.pptx" />
+            <button
+              type="button"
+              aria-label="파일 첨부"
+              style={{ background: "none", border: "none", cursor: readOnlyRoom ? "default" : "pointer", padding: 0, display: "flex" }}
+              disabled={readOnlyRoom || uploading || !selectedRoom}
+              onClick={() => fileInputRef.current?.click()}
+            >
+              <Paperclip size={18} aria-hidden />
+            </button>
+            <button
+              className="send-button"
+              aria-label="메시지 보내기"
+              onClick={() => void sendMessage()}
+              disabled={!draft.trim() || !selectedRoom || readOnlyRoom}
+            >
               <Send size={19} />
             </button>
           </footer>

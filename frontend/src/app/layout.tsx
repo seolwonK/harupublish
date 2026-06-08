@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import localFont from "next/font/local";
 import { AuthProvider } from "./auth";
+import { Footer } from "./components";
+import { CurrencyProvider } from "./currency";
 import "./globals.css";
 
 const gmarketSans = localFont({
@@ -43,7 +45,12 @@ export default function RootLayout({
   return (
     <html lang="ko">
       <body className={gmarketSans.variable}>
-        <AuthProvider>{children}</AuthProvider>
+        <AuthProvider>
+          <CurrencyProvider>
+            {children}
+            <Footer />
+          </CurrencyProvider>
+        </AuthProvider>
       </body>
     </html>
   );

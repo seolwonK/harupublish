@@ -3,15 +3,18 @@
 @tailwind utilities;
 
 :root {
+  --app-header-height: 72px;
   --background: #fffaf2;
   --panel: #ffffff;
   --panel-soft: #fff7ea;
   --ink: #202124;
   --muted: #6b7280;
   --line: #eee2cf;
-  --brand: #ff8a3d;
-  --brand-dark: #e96f21;
-  --brand-soft: #fff0df;
+  --brand: #7C3AED;
+  --brand-dark: #6D28D9;
+  --brand-soft: #F3EEFF;
+  --brand-rgb: 124, 58, 237;
+  --brand-shadow: rgba(124, 58, 237, 0.28);
   --green: #21a66b;
   --green-soft: #eaf8ef;
   --blue: #3578e5;
@@ -118,7 +121,7 @@ a:focus-visible,
 input:focus-visible,
 select:focus-visible,
 textarea:focus-visible {
-  outline: 3px solid rgba(255, 138, 61, 0.35);
+  outline: 3px solid rgba(var(--brand-rgb), 0.35);
   outline-offset: 3px;
 }
 
@@ -155,6 +158,7 @@ textarea:focus-visible {
 .ui-button,
 .primary-button,
 .ghost-button,
+.secondary-button,
 .link-button,
 .secondary-cta {
   display: inline-flex;
@@ -175,7 +179,7 @@ textarea:focus-visible {
 .primary-button {
   background: var(--brand);
   color: #ffffff;
-  box-shadow: 0 10px 24px rgba(255, 138, 61, 0.28);
+  box-shadow: 0 10px 24px var(--brand-shadow);
 }
 
 .ui-button-primary:hover,
@@ -195,9 +199,30 @@ textarea:focus-visible {
 .ui-button-secondary:hover,
 .ghost-button:hover,
 .secondary-cta:hover {
-  border-color: rgba(255, 138, 61, 0.5);
+  border-color: rgba(var(--brand-rgb), 0.5);
   color: var(--brand-dark);
   box-shadow: var(--shadow-soft);
+}
+
+.secondary-button {
+  border-color: rgba(var(--brand-rgb), 0.35);
+  background: var(--brand-soft);
+  color: var(--brand-dark);
+}
+
+.secondary-button:hover {
+  border-color: rgba(var(--brand-rgb), 0.6);
+  box-shadow: var(--shadow-soft);
+  transform: translateY(-1px);
+}
+
+.primary-button:disabled,
+.ghost-button:disabled,
+.secondary-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
 }
 
 .ui-button-ghost {
@@ -302,7 +327,7 @@ textarea:focus-visible {
   position: sticky;
   top: 0;
   z-index: 20;
-  min-height: 72px;
+  min-height: var(--app-header-height);
   display: grid;
   grid-template-columns: 180px 1fr auto;
   align-items: center;
@@ -435,6 +460,58 @@ textarea:focus-visible {
   color: var(--brand-dark);
 }
 
+.currency-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: white;
+  padding: 3px;
+}
+
+.currency-toggle-button {
+  border: 0;
+  border-radius: 999px;
+  padding: 5px 11px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  color: var(--muted);
+  background: transparent;
+  cursor: pointer;
+  transition: background 160ms ease, color 160ms ease;
+}
+
+.currency-toggle-button.selected {
+  background: var(--brand-soft);
+  color: var(--brand-dark);
+}
+
+.currency-toggle-button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.fee-caption {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+.fee-caption-tight {
+  margin: -6px 0 4px;
+}
+
+.usd-fixed-note {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--brand-dark);
+}
+
 .avatar {
   position: relative;
   display: inline-grid;
@@ -444,9 +521,9 @@ textarea:focus-visible {
   height: 40px;
   border-radius: 50%;
   overflow: hidden;
-  background: linear-gradient(145deg, #fff1dd, #eaf8ef);
+  background: linear-gradient(145deg, #EDE9FE, #eaf8ef);
   border: 1px solid rgba(0, 0, 0, 0.05);
-  color: #9a4a0f;
+  color: #5B21B6;
   font-size: 12px;
   font-weight: 900;
 }
@@ -729,7 +806,7 @@ textarea:focus-visible {
   border-color: var(--brand);
   background: var(--brand-soft);
   color: var(--brand-dark);
-  box-shadow: inset 0 0 0 1px rgba(255, 138, 61, 0.25);
+  box-shadow: inset 0 0 0 1px rgba(var(--brand-rgb), 0.25);
 }
 
 .join-preview {
@@ -741,7 +818,7 @@ textarea:focus-visible {
 }
 
 .join-preview svg {
-  color: #ffd28b;
+  color: #C4B5FD;
 }
 
 .join-preview span {
@@ -855,7 +932,7 @@ textarea:focus-visible {
 }
 
 .home-tutor-card.featured {
-  border-color: rgba(255, 138, 61, 0.6);
+  border-color: rgba(var(--brand-rgb), 0.6);
   transform: translateY(-8px);
 }
 
@@ -1433,7 +1510,7 @@ hr {
 }
 
 .tutors-category-tabs button.selected {
-  border-color: rgba(255, 138, 61, 0.55);
+  border-color: rgba(var(--brand-rgb), 0.55);
   background: var(--brand-soft);
   color: var(--brand-dark);
 }
@@ -1836,7 +1913,7 @@ hr {
 .line-chart span {
   flex: 1;
   border-radius: 999px 999px 8px 8px;
-  background: linear-gradient(180deg, var(--brand), #ffd194);
+  background: linear-gradient(180deg, var(--brand), #C4B5FD);
 }
 
 .admin-menu-grid {
@@ -1908,10 +1985,10 @@ th {
 .empty-state {
   display: grid;
   gap: 8px;
-  border: 1px dashed rgba(255, 138, 61, 0.35);
+  border: 1px dashed rgba(var(--brand-rgb), 0.35);
   border-radius: 18px;
   padding: 18px;
-  background: rgba(255, 240, 223, 0.55);
+  background: rgba(243, 238, 255, 0.55);
   color: #4d465c;
 }
 
@@ -2112,7 +2189,7 @@ th {
   justify-content: center;
   gap: 8px;
   min-height: 74px;
-  border: 1px dashed rgba(255, 138, 61, 0.55);
+  border: 1px dashed rgba(var(--brand-rgb), 0.55);
   border-radius: 8px;
   background: var(--brand-soft);
   color: var(--brand-dark);
@@ -2301,9 +2378,11 @@ th {
 
 .chat-layout {
   display: grid;
-  grid-template-columns: 340px minmax(0, 1fr);
+  grid-template-columns: clamp(260px, 26%, 320px) minmax(0, 1fr);
   width: min(1180px, calc(100vw - 32px));
-  min-height: calc(100vh - 56px);
+  /* 헤더(공유 변수) + 상하 마진 28px*2 를 제외한 뷰포트 높이에 정확히 맞춘다. */
+  height: calc(100vh - var(--app-header-height) - 56px);
+  min-height: 480px;
   margin: 28px auto;
   overflow: hidden;
   border: 1px solid var(--line);
@@ -2313,14 +2392,19 @@ th {
 }
 
 .chat-list {
-  display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
-  align-content: start;
+  display: flex;
+  flex-direction: column;
   gap: 12px;
   min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
   border-right: 1px solid var(--line);
   background: #fffdf8;
   padding: 18px;
+}
+
+.chat-list .conversation {
+  flex-shrink: 0;
 }
 
 .chat-list .search-box {
@@ -2342,7 +2426,7 @@ th {
 
 .conversation.selected,
 .conversation:hover {
-  border-color: rgba(255, 138, 61, 0.28);
+  border-color: rgba(var(--brand-rgb), 0.28);
   background: #ffffff;
   box-shadow: 0 10px 22px rgba(83, 55, 26, 0.06);
 }
@@ -2387,6 +2471,17 @@ th {
   background: var(--brand);
   color: white;
   font-size: 11px;
+}
+
+/* 비로그인 등 빈 상태: 패널 정중앙에 안내 + 버튼을 콘텐츠 크기로 배치 */
+.chat-empty {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 40px;
 }
 
 .chat-room {
@@ -2442,8 +2537,8 @@ th {
 .date-divider {
   align-self: center;
   border-radius: 999px;
-  background: rgba(255, 240, 223, 0.8);
-  color: #8b5a2b;
+  background: rgba(243, 238, 255, 0.8);
+  color: #5B21B6;
   padding: 7px 12px;
   font-size: 12px;
   font-weight: 800;
@@ -2462,8 +2557,7 @@ th {
 }
 
 .bubble.mine {
-  align-self: flex-end;
-  border-color: rgba(255, 138, 61, 0.35);
+  border-color: rgba(var(--brand-rgb), 0.35);
   background: var(--brand);
   color: white;
   border-bottom-right-radius: 6px;
@@ -2471,13 +2565,59 @@ th {
 
 .bubble.mine.soft {
   background: var(--brand-soft);
-  color: #87420e;
+  color: #5B21B6;
 }
 
 .bubble.other {
-  align-self: flex-start;
   background: white;
   border-bottom-left-radius: 6px;
+}
+
+/* 카톡식 좌우 정렬: 내 메시지는 우측, 상대는 좌측. 시간은 말풍선 옆에 붙는다. */
+.message-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+  max-width: 100%;
+}
+
+.message-row.mine {
+  align-self: flex-end;
+  flex-direction: row-reverse;
+}
+
+.message-row.other {
+  align-self: flex-start;
+}
+
+.message-meta {
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  gap: 2px;
+  padding-bottom: 3px;
+}
+
+.message-row.mine .message-meta {
+  align-items: flex-end;
+}
+
+.message-row.other .message-meta {
+  align-items: flex-start;
+}
+
+.message-time {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.message-read {
+  color: var(--brand);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
 }
 
 .chat-input {
@@ -2659,6 +2799,23 @@ th {
   padding: 6px 9px;
   color: #5a5369;
   font-size: 12px;
+}
+
+.waiver-control {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.waiver-status {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+.waiver-status-on {
+  color: var(--brand-dark);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -2904,6 +3061,7 @@ th {
   .chat-layout {
     grid-template-columns: 1fr;
     width: min(100% - 28px, 1180px);
+    height: auto;
     min-height: auto;
     margin: 18px auto;
   }
@@ -2934,4 +3092,20 @@ th {
   .bubble {
     max-width: 86%;
   }
+}
+
+/* 네비게이션 채팅 미읽음 배지 */
+.nav-unread-badge {
+  display: inline-grid;
+  place-items: center;
+  min-width: 18px;
+  height: 18px;
+  margin-left: 6px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--brand);
+  color: white;
+  font-size: 10px;
+  font-weight: 700;
+  vertical-align: middle;
 }

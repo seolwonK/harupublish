@@ -8,6 +8,7 @@ import com.haru.booking.api.dto.CreateBookingRequest;
 import com.haru.booking.domain.Booking;
 import com.haru.booking.domain.BookingStatus;
 import com.haru.booking.infra.BookingRepository;
+import com.haru.chat.application.ChatNotificationService;
 import com.haru.common.exception.BusinessException;
 import com.haru.common.exception.ErrorCode;
 import com.haru.common.exception.ForbiddenException;
@@ -18,6 +19,10 @@ import com.haru.payment.domain.PaymentStatus;
 import com.haru.payment.infra.PaymentRepository;
 import com.haru.schedule.domain.TutorScheduleSlot;
 import com.haru.schedule.infra.TutorScheduleSlotRepository;
+import com.haru.settings.application.PlatformSettingsService;
+import com.haru.settings.domain.FeePolicy;
+import com.haru.settlement.application.SettlementService;
+import com.haru.settlement.domain.EarningEntryType;
 import com.haru.tutor.domain.TutorProfile;
 import com.haru.tutor.domain.TutorProfileStatus;
 import com.haru.tutor.infra.TutorProfileRepository;
@@ -41,6 +46,9 @@ public class BookingService {
     private final PaymentRepository paymentRepository;
     private final JitsiRoomNameGenerator jitsiRoomNameGenerator;
     private final JitsiTokenService jitsiTokenService;
+    private final PlatformSettingsService platformSettingsService;
+    private final SettlementService settlementService;
+    private final ChatNotificationService chatNotificationService;
     private static final String ALREADY_BOOKED_MESSAGE = "Schedule slot is already booked.";
 
     public BookingService(
@@ -50,7 +58,10 @@ public class BookingService {
             BookingRepository bookingRepository,
             PaymentRepository paymentRepository,
             JitsiRoomNameGenerator jitsiRoomNameGenerator,
-            JitsiTokenService jitsiTokenService
+            JitsiTokenService jitsiTokenService,
+            PlatformSettingsService platformSettingsService,
+            SettlementService settlementService,
+            ChatNotificationService chatNotificationService
     ) {
         this.userAccountRepository = userAccountRepository;
         this.tutorProfileRepository = tutorProfileRepository;
@@ -59,6 +70,9 @@ public class BookingService {
         this.paymentRepository = paymentRepository;
         this.jitsiRoomNameGenerator = jitsiRoomNameGenerator;
         this.jitsiTokenService = jitsiTokenService;
+        this.platformSettingsService = platformSettingsService;
+        this.settlementService = settlementService;
+        this.chatNotificationService = chatNotificationService;
     }
 
     @Transactional
@@ -95,6 +109,7 @@ public class BookingService {
                 jitsiRoomNameGenerator.createRoomName(booking.getId()),
                 Instant.now()
         );
+        chatNotificationService.notifyBookingConfirmed(booking);
         return BookingResponse.from(booking, Instant.now());
     }
 
@@ -117,8 +132,24 @@ public class BookingService {
     @Transactional
     public BookingResponse cancel(Long userId, Long bookingId, CancelBookingRequest request) {
         Booking booking = getBookingWithAccess(userId, bookingId);
-        booking.cancel(request == null ? null : request.reason(), Instant.now());
-        return BookingResponse.from(booking, Instant.now());
+        Instant now = Instant.now();
+        String reason = request == null ? null : request.reason();
+
+        if (booking.getTutorProfile().getUser().getId().equals(userId)) {
+            // Tutor cancels their own lesson: always a normal cancel — the
+            // student's credit stays refundable and no earning accrues.
+            booking.cancelByTutor(reason, now);
+        } else {
+            FeePolicy feePolicy = platformSettingsService.currentFeePolicy();
+            boolean lateCancel = booking.cancel(reason, feePolicy.cancelWindowHours(), now);
+            if (lateCancel) {
+                // Student late cancel = lesson consumed, student refunded 0, 100%
+                // accrues to the tutor. Credit the earning immediately as cyber money.
+                settlementService.settleEarnedBooking(booking, EarningEntryType.NO_SHOW_EARNED, now);
+            }
+        }
+        chatNotificationService.notifyBookingCancelled(booking);
+        return BookingResponse.from(booking, now);
     }
 
     @Transactional(readOnly = true)
@@ -162,11 +193,10 @@ public class BookingService {
                 lessonDurationMinutes,
                 PaymentStatus.PAID
         ));
-        long consumedLessons = bookingRepository.countByStudentIdAndTutorProfileIdAndLessonDurationMinutesAndStatusNot(
+        long consumedLessons = bookingRepository.countConsumedLessons(
                 studentUserId,
                 tutorProfileId,
-                lessonDurationMinutes,
-                BookingStatus.CANCELLED
+                lessonDurationMinutes
         );
 
         if (paidLessons <= consumedLessons) {

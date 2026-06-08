@@ -2,8 +2,9 @@
 
 import { CheckCircle2, ExternalLink, RefreshCcw, WalletCards } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { haruApi, PaymentResponse, toMoney } from "../api";
+import { formatMoney, formatRatePercent, haruApi, PaymentResponse } from "../api";
 import { useAuth } from "../auth";
+import { useCurrency } from "../currency";
 import { clearPendingBookingIntent, PendingBookingIntent, readPendingBookingIntent } from "../booking-intent";
 import { ApiNotice, AppHeader, Badge, Button, EmptyState, SectionHeader, StatCard, statusLabel } from "../components";
 
@@ -26,6 +27,8 @@ function statusTone(status: PaymentResponse["status"]) {
 
 export default function PaymentsPage() {
   const { accessToken } = useAuth();
+  const { displayCurrency, fxRate } = useCurrency();
+  const money = (value: number | string | null | undefined) => formatMoney(value, { currency: displayCurrency, fxRate });
   const [payments, setPayments] = useState<PaymentResponse[]>([]);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -167,7 +170,7 @@ export default function PaymentsPage() {
           <StatCard label="결제 요청" value={String(payments.length)} hint="내 결제 건수" />
           <StatCard label="결제 대기" value={String(pendingCount)} hint="Lemon Squeezy 완료 대기" />
           <StatCard label="결제 완료" value={String(paidCount)} hint="웹훅 동기화 완료" />
-          <StatCard label="요청 총액" value={toMoney(totalRequested)} hint="USD 기준" />
+          <StatCard label="요청 총액" value={money(totalRequested)} hint={displayCurrency === "KRW" ? "USD 원장 · KRW 표시" : "USD 기준"} />
         </aside>
 
         <section className="panel payments-panel">
@@ -223,8 +226,10 @@ export default function PaymentsPage() {
                   {payment.providerOrderIdentifier ? <span>주문번호 {payment.providerOrderIdentifier}</span> : null}
                 </div>
                 <div className="payment-amount">
-                  <strong>{toMoney(payment.totalAmount)}</strong>
-                  <span>수수료 {toMoney(payment.studentFeeAmount)}</span>
+                  <strong>{money(payment.totalAmount)}</strong>
+                  <span className="fee-caption">
+                    수수료 {formatRatePercent(payment.appliedStudentFeeRate ?? 0.1)} 포함 (정보성 {money(payment.studentFeeAmount)})
+                  </span>
                 </div>
                 <Badge tone={statusTone(payment.status)}>{statusLabel(payment.status)}</Badge>
                 <div className="payment-actions">
