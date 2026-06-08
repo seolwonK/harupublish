@@ -34,6 +34,8 @@ services:
       HARU_JWT_SECRET: docker-local-development-secret-key-minimum-32-bytes
       HARU_JWT_ACCESS_TOKEN_EXPIRATION_MINUTES: 30
       HARU_JWT_REFRESH_TOKEN_EXPIRATION_DAYS: 14
+      # 개발자용 테스트 데이터 도구(/api/dev/**) 활성화. 로컬 전용.
+      HARU_DEV_TOOLS_ENABLED: "true"
     ports:
       - "8080:8080"
     volumes:

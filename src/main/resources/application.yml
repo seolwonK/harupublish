@@ -57,6 +57,10 @@ logging:
     console: "%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%thread] %logger{36} - %msg%n"
 
 haru:
+  # Developer test-data tooling (/api/dev/**). OFF by default; enable only on
+  # local and non-production test-MVP environments. Never enable in real prod.
+  dev:
+    enabled: ${HARU_DEV_TOOLS_ENABLED:false}
   cors:
     allowed-origin-patterns: ${HARU_CORS_ALLOWED_ORIGIN_PATTERNS:http://localhost:3000,http://127.0.0.1:3000,http://localhost:3001,http://127.0.0.1:3001,http://localhost:3002,http://127.0.0.1:3002}
   jwt:

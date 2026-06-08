@@ -21,3 +21,6 @@ services:
         value: -XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0
       - key: HARU_JWT_SECRET
         generateValue: true
+      # 테스트 MVP 배포용 개발자 도구(/api/dev/**) 활성화. 실서비스 전환 시 false로 변경/삭제할 것.
+      - key: HARU_DEV_TOOLS_ENABLED
+        value: "true"

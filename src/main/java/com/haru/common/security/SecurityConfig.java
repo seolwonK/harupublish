@@ -74,6 +74,9 @@ public class SecurityConfig {
                         ).permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/payments/webhooks/lemonsqueezy", "/api/payments/webhooks/lemon-squeezy").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/exchange-rates/latest").permitAll()
+                        // Dev test-data tooling. Open at the HTTP layer; the controller itself is
+                        // inert (404) unless haru.dev.enabled=true, which is the real on/off switch.
+                        .requestMatchers("/api/dev/**").permitAll()
                         .requestMatchers("/api/tutors/me/**").authenticated()
                         .requestMatchers(HttpMethod.GET, "/api/tutors", "/api/tutors/*", "/api/tutors/*/schedule", "/api/tutors/*/reviews").permitAll()
                         .requestMatchers("/api/auth/signup", "/api/auth/login", "/api/auth/refresh").permitAll()
