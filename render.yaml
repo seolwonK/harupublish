@@ -4,7 +4,7 @@ services:
     runtime: docker
     dockerfilePath: ./Dockerfile
     rootDir: .
-    healthCheckPath: /swagger-ui.html
+    healthCheckPath: /healthz
     autoDeploy: true
     # 업로드(튜터 이미지, 채팅 첨부) 영속화 — 디스크 없이는 재배포마다 파일이 소실된다.
     # 주의: 디스크가 붙은 서비스는 zero-downtime 배포가 비활성화된다(재시작 배포).
@@ -17,8 +17,16 @@ services:
         value: render
       - key: SPRING_FLYWAY_LOCATIONS
         value: classpath:db/migration,classpath:db/migration/{vendor}
+      # 소형 인스턴스 메모리 절감: 힙 70% + SerialGC(1 CPU/작은 힙에 유리),
+      # 톰캣 워커/DB 풀 축소. JAVA_MAX_RAM_PERCENTAGE는 Dockerfile entrypoint가 사용.
       - key: JAVA_TOOL_OPTIONS
-        value: -XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0
+        value: -XX:+UseContainerSupport -XX:MaxRAMPercentage=70.0 -XX:+UseSerialGC
+      - key: JAVA_MAX_RAM_PERCENTAGE
+        value: "70"
+      - key: SERVER_TOMCAT_MAX_THREADS
+        value: "25"
+      - key: DB_POOL_MAX_SIZE
+        value: "5"
       - key: HARU_JWT_SECRET
         generateValue: true
       # 테스트 MVP 배포용 개발자 도구(/api/dev/**) 활성화. 실서비스 전환 시 false로 변경/삭제할 것.

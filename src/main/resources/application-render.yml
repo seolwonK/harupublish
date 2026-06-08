@@ -1,0 +1,8 @@
+# Render(프로덕션/테스트 MVP) 프로필 전용 오버라이드.
+# 메모리/시작 비용을 줄이기 위해 springdoc(OpenAPI/Swagger)을 비활성화한다.
+# 로컬(default 프로필)에서는 그대로 켜져 있어 개발에 영향 없음.
+springdoc:
+  api-docs:
+    enabled: false
+  swagger-ui:
+    enabled: false

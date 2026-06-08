@@ -64,6 +64,7 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         .requestMatchers(
                                 "/",
+                                "/healthz",
                                 "/test-ui.html",
                                 "/uploads/**",
                                 "/ws-chat/**",
