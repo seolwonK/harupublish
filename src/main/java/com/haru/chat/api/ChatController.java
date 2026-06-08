@@ -4,9 +4,11 @@ import com.haru.chat.api.dto.ChatMessageListResponse;
 import com.haru.chat.api.dto.ChatMessageResponse;
 import com.haru.chat.api.dto.ChatRoomListResponse;
 import com.haru.chat.api.dto.ChatRoomSummary;
+import com.haru.chat.api.dto.ContactListResponse;
 import com.haru.chat.api.dto.MarkReadRequest;
 import com.haru.chat.api.dto.SendMessageRequest;
 import com.haru.chat.api.dto.StartChatRequest;
+import com.haru.chat.api.dto.StartDirectChatRequest;
 import com.haru.chat.api.dto.UnreadCountResponse;
 import com.haru.chat.application.ChatService;
 import com.haru.common.response.ApiResponse;
@@ -47,6 +49,32 @@ public class ChatController {
             @Valid @RequestBody StartChatRequest request
     ) {
         return ApiResponse.success(chatService.startDirectRoom(principal.userId(), request));
+    }
+
+    @Operation(
+            summary = "상대 검색 후 1:1 채팅방 생성/조회",
+            description = "검색으로 지정한 사용자(userId)와의 1:1 채팅방을 생성합니다. 이미 존재하면 기존 방을 반환합니다.",
+            security = @SecurityRequirement(name = "bearerAuth")
+    )
+    @PostMapping("/direct")
+    public ApiResponse<ChatRoomSummary> startDirectChat(
+            @AuthenticationPrincipal HaruPrincipal principal,
+            @Valid @RequestBody StartDirectChatRequest request
+    ) {
+        return ApiResponse.success(chatService.startDirectRoomWithUser(principal.userId(), request.userId()));
+    }
+
+    @Operation(
+            summary = "채팅 상대 검색",
+            description = "이름 또는 이메일로 채팅 가능한 사용자를 검색합니다. (본인/관리자 제외)",
+            security = @SecurityRequirement(name = "bearerAuth")
+    )
+    @GetMapping("/contacts")
+    public ApiResponse<ContactListResponse> searchContacts(
+            @AuthenticationPrincipal HaruPrincipal principal,
+            @RequestParam(required = false) String query
+    ) {
+        return ApiResponse.success(chatService.searchContacts(principal.userId(), query));
     }
 
     @Operation(summary = "내 채팅방 목록 조회", security = @SecurityRequirement(name = "bearerAuth"))

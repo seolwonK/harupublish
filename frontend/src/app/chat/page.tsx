@@ -4,6 +4,7 @@ import { Paperclip, Send } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import { Fragment, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  ChatContact,
   ChatMessageResponse,
   ChatRoomSummary,
   ChatSocketEvent,
@@ -89,6 +90,15 @@ function ChatPageContent() {
   const [draft, setDraft] = useState("");
   const [notice, setNotice] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
+
+  // '새 대화' 검색: 상대를 직접 찾아 채팅 시작.
+  const [composeOpen, setComposeOpen] = useState(false);
+  const [contactQuery, setContactQuery] = useState("");
+  const [contacts, setContacts] = useState<ChatContact[]>([]);
+  const [contactsLoading, setContactsLoading] = useState(false);
+
+  // 헤더 시계. SSR에서는 비워 두고 마운트 후에만 채워 hydration 불일치를 막는다.
+  const [koreaTime, setKoreaTime] = useState<string | null>(null);
 
   // 상대 읽음 포인터의 실시간 갱신분 (READ 이벤트). 방 전환 시 초기화.
   const [liveCounterpartReadId, setLiveCounterpartReadId] = useState<number | null>(null);
@@ -252,6 +262,52 @@ function ChatPageContent() {
     if (area) area.scrollTop = area.scrollHeight;
   }, [messages]);
 
+  // 헤더 시계: 마운트 후 Asia/Seoul 기준으로 30초마다 갱신.
+  useEffect(() => {
+    const update = () =>
+      setKoreaTime(
+        new Date().toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Seoul" })
+      );
+    update();
+    const timer = setInterval(update, 30_000);
+    return () => clearInterval(timer);
+  }, []);
+
+  // '새 대화' 상대 검색 (디바운스 300ms).
+  useEffect(() => {
+    if (!composeOpen || !accessToken) return;
+    const query = contactQuery.trim();
+    if (!query) {
+      setContacts([]);
+      setContactsLoading(false);
+      return;
+    }
+    setContactsLoading(true);
+    const timer = setTimeout(() => {
+      haruApi
+        .searchChatContacts(accessToken, query)
+        .then((response) => setContacts(response.contacts))
+        .catch(() => setContacts([]))
+        .finally(() => setContactsLoading(false));
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [composeOpen, contactQuery, accessToken]);
+
+  async function startChatWith(contact: ChatContact) {
+    if (!accessToken) return;
+    setNotice(null);
+    try {
+      const room = await haruApi.startChatWithUser(accessToken, contact.userId);
+      await reloadRooms();
+      setSelectedRoomId(room.id);
+      setComposeOpen(false);
+      setContactQuery("");
+      setContacts([]);
+    } catch (error) {
+      setNotice(errorMessage(error));
+    }
+  }
+
   const filteredRooms = useMemo(() => {
     if (!search.trim()) return rooms;
     const query = search.trim().toLowerCase();
@@ -365,27 +421,62 @@ function ChatPageContent() {
       <AppHeader />
       <main className="chat-layout">
         <aside className="chat-list">
-          <label className="search-box">
-            <input placeholder="튜터, 메시지 검색" value={search} onChange={(event) => setSearch(event.target.value)} />
-          </label>
-          {filteredRooms.map((room) => (
-            <article
-              className={room.id === selectedRoomId ? "conversation selected" : "conversation"}
-              key={room.id}
-              onClick={() => setSelectedRoomId(room.id)}
-            >
-              <Avatar label={avatarLabel(room.counterpartName)} imageUrl={room.counterpartImageUrl} />
-              <div>
-                <strong>{room.counterpartName}</strong>
-                <p>{room.lastMessagePreview ?? "대화를 시작해 보세요."}</p>
-              </div>
-              <div className="conversation-meta">
-                <span>{formatConversationTime(room.lastMessageAt)}</span>
-                {room.unreadCount ? <b>{room.unreadCount}</b> : null}
-              </div>
-            </article>
-          ))}
-          {filteredRooms.length === 0 ? <ApiNotice type="info">대화가 없습니다. 튜터 프로필에서 메시지를 보내보세요.</ApiNotice> : null}
+          <button type="button" className="chat-new-button" onClick={() => setComposeOpen((open) => !open)}>
+            {composeOpen ? "← 대화 목록" : "+ 새 대화"}
+          </button>
+
+          {composeOpen ? (
+            <div className="chat-compose">
+              <label className="search-box">
+                <input
+                  autoFocus
+                  placeholder="이름 또는 이메일로 상대 검색"
+                  value={contactQuery}
+                  onChange={(event) => setContactQuery(event.target.value)}
+                />
+              </label>
+              {contactsLoading ? <p className="chat-compose-hint">검색 중…</p> : null}
+              {!contactsLoading && contactQuery.trim() && contacts.length === 0 ? (
+                <p className="chat-compose-hint">검색 결과가 없습니다.</p>
+              ) : null}
+              {!contactQuery.trim() ? <p className="chat-compose-hint">이름이나 이메일로 상대를 검색하세요.</p> : null}
+              {contacts.map((contact) => (
+                <article className="conversation" key={contact.userId} onClick={() => void startChatWith(contact)}>
+                  <Avatar label={avatarLabel(contact.name)} imageUrl={contact.imageUrl} />
+                  <div>
+                    <strong>{contact.name}</strong>
+                    <p>{contact.tutor ? "튜터" : "학생"}</p>
+                  </div>
+                </article>
+              ))}
+            </div>
+          ) : (
+            <>
+              <label className="search-box">
+                <input placeholder="튜터, 메시지 검색" value={search} onChange={(event) => setSearch(event.target.value)} />
+              </label>
+              {filteredRooms.map((room) => (
+                <article
+                  className={room.id === selectedRoomId ? "conversation selected" : "conversation"}
+                  key={room.id}
+                  onClick={() => setSelectedRoomId(room.id)}
+                >
+                  <Avatar label={avatarLabel(room.counterpartName)} imageUrl={room.counterpartImageUrl} />
+                  <div>
+                    <strong>{room.counterpartName}</strong>
+                    <p>{room.lastMessagePreview ?? "대화를 시작해 보세요."}</p>
+                  </div>
+                  <div className="conversation-meta">
+                    <span>{formatConversationTime(room.lastMessageAt)}</span>
+                    {room.unreadCount ? <b>{room.unreadCount}</b> : null}
+                  </div>
+                </article>
+              ))}
+              {filteredRooms.length === 0 ? (
+                <ApiNotice type="info">대화가 없습니다. ‘+ 새 대화’로 상대를 검색해 보세요.</ApiNotice>
+              ) : null}
+            </>
+          )}
         </aside>
 
         <section className="chat-room">
@@ -395,7 +486,7 @@ function ChatPageContent() {
               <h1>{selectedRoom?.counterpartName ?? "대화를 선택해 주세요"}</h1>
               <p>{roomSubtitle(selectedRoom, connected)}</p>
             </div>
-            <span>한국 시간 {new Date().toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" })}</span>
+            <span suppressHydrationWarning>{koreaTime ? `한국 시간 ${koreaTime}` : ""}</span>
           </header>
           {notice ? <ApiNotice type="error">{notice}</ApiNotice> : null}
           <div className="message-area" ref={messageAreaRef}>
@@ -457,6 +548,24 @@ function ChatPageContent() {
           </footer>
         </section>
       </main>
+
+      <style>{`
+        .chat-new-button {
+          width: 100%;
+          padding: 10px 12px;
+          margin-bottom: 10px;
+          border: 1px solid var(--line);
+          border-radius: 10px;
+          background: var(--brand-soft);
+          color: var(--brand-dark);
+          font-weight: 600;
+          font-size: 14px;
+          cursor: pointer;
+        }
+        .chat-new-button:hover { filter: brightness(0.98); }
+        .chat-compose { display: flex; flex-direction: column; gap: 6px; }
+        .chat-compose-hint { color: var(--muted); font-size: 13px; margin: 2px 6px; }
+      `}</style>
     </>
   );
 }

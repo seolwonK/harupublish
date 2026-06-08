@@ -39,8 +39,12 @@ public class ChatNotificationService {
         Long tutorUserId = tutorUser.getId();
         String studentMessage = "수업이 예약되었습니다. %s 튜터 · %s".formatted(tutorName, lessonTime(booking, student));
         String tutorMessage = "새로운 수업이 예약되었습니다. %s 학생 · %s".formatted(student.getName(), lessonTime(booking, tutorUser));
+        // 예약이 성사되면 학생-튜터 1:1 방을 만들어 양쪽 채팅 목록에 서로가 뜨게 한다.
+        String directMessage = "수업이 예약되었습니다. %s 튜터 · %s 학생 · %s"
+                .formatted(tutorName, student.getName(), lessonTime(booking, tutorUser));
 
         afterCommit(() -> {
+            runQuietly("direct room ensure", () -> chatService.ensureDirectRoom(studentId, tutorUserId, directMessage));
             sendQuietly(studentId, studentMessage);
             sendQuietly(tutorUserId, tutorMessage);
         });
@@ -82,6 +86,15 @@ public class ChatNotificationService {
             chatService.sendSystemNotice(userId, body);
         } catch (RuntimeException exception) {
             log.warn("System notice delivery failed for user {}: {}", userId, exception.getMessage());
+        }
+    }
+
+    /** Best-effort side task (e.g. direct-room creation): log and swallow failures. */
+    private void runQuietly(String what, Runnable task) {
+        try {
+            task.run();
+        } catch (RuntimeException exception) {
+            log.warn("{} failed: {}", what, exception.getMessage());
         }
     }
 

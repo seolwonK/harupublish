@@ -415,6 +415,18 @@ export type ChatMessageListResponse = {
   hasMore: boolean;
 };
 
+/** 채팅 상대 검색 결과 1건. */
+export type ChatContact = {
+  userId: number;
+  name: string;
+  imageUrl: string | null;
+  tutor: boolean;
+};
+
+export type ContactListResponse = {
+  contacts: ChatContact[];
+};
+
 /** STOMP 토픽으로 수신하는 이벤트 envelope. */
 export type ChatSocketEvent = {
   type: "MESSAGE" | "READ" | "UNREAD";
@@ -817,6 +829,12 @@ export const haruApi = {
   // ── 채팅 ──
   startChat(token: string, tutorProfileId: number) {
     return apiRequest<ChatRoomSummary>("/api/chats", { method: "POST", token, body: { tutorProfileId } });
+  },
+  searchChatContacts(token: string, query: string) {
+    return apiRequest<ContactListResponse>("/api/chats/contacts", { token, query: { query }, cache: "no-store" });
+  },
+  startChatWithUser(token: string, userId: number) {
+    return apiRequest<ChatRoomSummary>("/api/chats/direct", { method: "POST", token, body: { userId } });
   },
   listChats(token: string) {
     return apiRequest<ChatRoomListResponse>("/api/chats", { token });

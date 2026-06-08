@@ -4,6 +4,8 @@ import com.haru.chat.api.dto.ChatMessageListResponse;
 import com.haru.chat.api.dto.ChatMessageResponse;
 import com.haru.chat.api.dto.ChatRoomListResponse;
 import com.haru.chat.api.dto.ChatRoomSummary;
+import com.haru.chat.api.dto.ContactListResponse;
+import com.haru.chat.api.dto.ContactResponse;
 import com.haru.chat.api.dto.SendMessageRequest;
 import com.haru.chat.api.dto.StartChatRequest;
 import com.haru.chat.domain.ChatMessage;
@@ -92,6 +94,84 @@ public class ChatService {
                         List.of(requester.getId(), tutorUser.getId())
                 ));
         return summarize(room, requesterId);
+    }
+
+    /** Start (or reuse) a 1:1 room with another user picked from contact search. */
+    @Transactional
+    public ChatRoomSummary startDirectRoomWithUser(Long requesterId, Long counterpartUserId) {
+        if (counterpartUserId == null || counterpartUserId.equals(requesterId)) {
+            throw new BusinessException(ErrorCode.INVALID_REQUEST, "You cannot start a chat with yourself.");
+        }
+        userAccountRepository.findWithRolesById(requesterId)
+                .orElseThrow(() -> new NotFoundException("User was not found."));
+        UserAccount counterpart = userAccountRepository.findWithRolesById(counterpartUserId)
+                .orElseThrow(() -> new NotFoundException("Counterpart user was not found."));
+        if (counterpart.getRoles().contains(Role.ADMIN)) {
+            throw new BusinessException(ErrorCode.INVALID_REQUEST, "Cannot start a direct chat with an admin.");
+        }
+
+        String pairKey = ChatRoom.directPairKey(requesterId, counterpartUserId);
+        ChatRoom room = chatRoomRepository.findByDirectPairKey(pairKey)
+                .orElseGet(() -> createRoom(
+                        ChatRoom.direct(requesterId, counterpartUserId),
+                        pairKey,
+                        List.of(requesterId, counterpartUserId)
+                ));
+        return summarize(room, requesterId);
+    }
+
+    /** Name/email contact search for starting a new chat (excludes self and admins). */
+    @Transactional(readOnly = true)
+    public ContactListResponse searchContacts(Long requesterId, String query) {
+        if (query == null || query.trim().isEmpty()) {
+            return new ContactListResponse(List.of());
+        }
+        List<UserAccount> matches = userAccountRepository.searchContacts(
+                query.trim(), requesterId, Role.ADMIN, PageRequest.of(0, 20));
+        Set<Long> ids = matches.stream().map(UserAccount::getId).collect(Collectors.toSet());
+        Map<Long, TutorProfile> tutorProfiles = ids.isEmpty()
+                ? Map.of()
+                : tutorProfileRepository.findAllByUserIdIn(ids).stream()
+                        .collect(Collectors.toMap(profile -> profile.getUser().getId(), Function.identity(), (a, b) -> a));
+
+        List<ContactResponse> contacts = matches.stream().map(user -> {
+            TutorProfile profile = tutorProfiles.get(user.getId());
+            boolean tutor = profile != null;
+            String name = tutor && profile.getDisplayName() != null && !profile.getDisplayName().isBlank()
+                    ? profile.getDisplayName()
+                    : user.getName();
+            String imageUrl = !tutor ? null
+                    : profile.getThumbnailUrl() != null && !profile.getThumbnailUrl().isBlank()
+                            ? profile.getThumbnailUrl()
+                            : profile.getProfileImageUrl();
+            return new ContactResponse(user.getId(), name, imageUrl, tutor);
+        }).toList();
+        return new ContactListResponse(contacts);
+    }
+
+    /**
+     * Ensure a DIRECT room exists between two users so both see each other in
+     * their chat list, optionally dropping a system message to seed the thread.
+     * Runs in its own transaction (REQUIRES_NEW) and is called best-effort after
+     * the booking commit, so a failure here never affects the booking.
+     */
+    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.REQUIRES_NEW)
+    public void ensureDirectRoom(Long userIdA, Long userIdB, String systemMessage) {
+        if (userIdA == null || userIdB == null || userIdA.equals(userIdB)) {
+            return;
+        }
+        String pairKey = ChatRoom.directPairKey(userIdA, userIdB);
+        ChatRoom room = chatRoomRepository.findByDirectPairKey(pairKey)
+                .orElseGet(() -> createRoom(
+                        ChatRoom.direct(userIdA, userIdB),
+                        pairKey,
+                        List.of(userIdA, userIdB)
+                ));
+        if (systemMessage != null && !systemMessage.isBlank()) {
+            ChatMessage message = messageRepository.saveAndFlush(ChatMessage.system(room, systemMessage));
+            room.touch(message.getId(), Instant.now());
+            chatBroadcaster.broadcastMessage(List.of(userIdA, userIdB), ChatMessageResponse.from(message));
+        }
     }
 
     @Transactional
