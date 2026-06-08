@@ -50,6 +50,8 @@ export type ExpertListResponse = {
   availableLanguages: string[] | null;
   lessonPrice25Amount: number | string | null;
   lessonPrice50Amount: number | string | null;
+  /** 카탈로그 학생 표시가 (= lessonPrice25Amount * (1 + studentFeeRate), HALF_UP scale2). 표시 전용, 권위 가격은 checkout. */
+  studentPrice25Amount: number | string | null;
   averageRating: number | null;
   reviewCount: number | null;
 };
@@ -68,6 +70,8 @@ export type TutorProfileResponse = {
   availableLanguages: string[] | null;
   lessonPrice25Amount: number | string | null;
   lessonPrice50Amount: number | string | null;
+  /** 학생 표시가 (= lessonPrice25Amount * (1 + studentFeeRate), HALF_UP scale2). 표시 전용, 권위 가격은 checkout. */
+  studentPrice25Amount: number | string | null;
   availableTimeNote: string | null;
   paymentMethod: string | null;
   status: TutorProfileStatus;
@@ -190,6 +194,17 @@ export type PaymentResponse = {
 
 export type PaymentListResponse = {
   payments: PaymentResponse[];
+};
+
+/** 관리자 환불 승인 큐: REFUND_REQUESTED 상태 결제 1건 (GET /api/admin/payments/refund-requests). */
+export type RefundRequestResponse = {
+  id: number;
+  studentUserId: number;
+  tutorProfileId: number;
+  totalAmount: number | string;
+  currency: string;
+  refundReason: string | null;
+  createdAt: string;
 };
 
 // ── 머니 코어: 플랫폼 설정 / 프로모 / 정산 / 인출 / 크레딧 / 환율 계약 (docs §8 기준) ──
@@ -741,7 +756,10 @@ export const haruApi = {
     });
   },
 
-  // ── 관리자: 환불 승인 -> Haru Credits 발급 ──
+  // ── 관리자: 환불 요청 큐 / 환불 승인 -> Haru Credits 발급 ──
+  getRefundRequests(token: string) {
+    return apiRequest<RefundRequestResponse[]>("/api/admin/payments/refund-requests", { token });
+  },
   approveRefund(token: string, paymentId: number) {
     return apiRequest<PaymentResponse>(`/api/admin/payments/${paymentId}/refund-approve`, { method: "POST", token });
   },
@@ -774,6 +792,20 @@ export const haruApi = {
     return apiRequest<{ count: number }>("/api/chats/unread-count", { token });
   }
 };
+
+/**
+ * 카탈로그 학생 표시가 해석기. 백엔드 studentPrice25Amount(권장)를 쓰고,
+ * 아직 없으면 lessonPrice25Amount로 폴백한다. (표시 전용 — 권위 가격은 checkout 응답.)
+ */
+export function resolveStudentPrice25(
+  tutor: Pick<ExpertListResponse, "studentPrice25Amount" | "lessonPrice25Amount">
+): number | string | null {
+  const student = tutor.studentPrice25Amount;
+  if (student !== null && student !== undefined && student !== "" && Number.isFinite(Number(student))) {
+    return student;
+  }
+  return tutor.lessonPrice25Amount;
+}
 
 export function toMoney(value: number | string | null | undefined) {
   if (value === null || value === undefined || value === "") return "$0.00";

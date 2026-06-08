@@ -27,7 +27,7 @@ import { usePathname } from "next/navigation";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import type { ExpertListResponse, Role } from "./api";
-import { haruApi, resolveAssetUrl, toMoney } from "./api";
+import { haruApi, resolveAssetUrl, resolveStudentPrice25, toMoney } from "./api";
 import { useAuth } from "./auth";
 import { useCurrency } from "./currency";
 import type { Booking, Tutor } from "./data";
@@ -372,6 +372,7 @@ export function Sidebar({ admin = false }: { admin?: boolean }) {
     ["튜터 승인", ShieldCheck, "/admin/tutors"],
     ["예약 관리", CalendarDays, "/admin"],
     ["결제/정산", CreditCard, "/admin"],
+    ["환불 승인", Wallet, "/admin/refunds"],
     ["수수료 설정", SlidersHorizontal, "/admin/settings"],
     ["인출 관리", Banknote, "/admin/withdrawals"],
     ["신고/후기", Bell, "/admin"],
@@ -455,7 +456,7 @@ export function ExpertCard({ tutor }: { tutor: ExpertListResponse }) {
         <p>{tutor.shortIntroduction ?? "한국어와 한국 문화를 함께 알려드려요."}</p>
         {(tutor.reviewCount ?? 0) > 0 ? <Rating value={tutor.averageRating ?? 0} reviews={tutor.reviewCount ?? 0} /> : <span className="muted">아직 리뷰 없음</span>}
         <span className="muted">{(tutor.availableLanguages ?? ["한국어"]).join(" · ")}</span>
-        <strong>25분 {toMoney(tutor.lessonPrice25Amount)}</strong>
+        <strong>25분 {toMoney(resolveStudentPrice25(tutor))}</strong>
       </div>
       <Button as="a" href={`/tutors/${tutor.tutorProfileId}`} variant="secondary" className="wide">
         프로필 보기

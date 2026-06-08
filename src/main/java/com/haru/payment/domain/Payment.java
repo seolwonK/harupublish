@@ -213,18 +213,60 @@ public class Payment {
         touch();
     }
 
-    public void markPaidByProvider(String providerOrderId, String providerOrderIdentifier) {
+    /**
+     * Provider-confirmed payment: marks the payment PAID and records the provider
+     * order ids.
+     *
+     * <p>Idempotency / replay guard (defect #8c): a payment that is already PAID or
+     * in a terminal state (REFUNDED / FAILED / CANCELLED) is left untouched and
+     * {@code false} is returned, so a re-delivered {@code order_created} webhook (or
+     * a duplicate of the same order) never re-runs {@code markPaid}. Returns
+     * {@code true} only when this call actually performed the PAID transition.</p>
+     */
+    public boolean markPaidByProvider(String providerOrderId, String providerOrderIdentifier) {
+        if (isTerminal() || status == PaymentStatus.PAID) {
+            return false;
+        }
         this.providerOrderId = providerOrderId;
         this.providerOrderIdentifier = providerOrderIdentifier;
         this.status = PaymentStatus.PAID;
         touch();
+        return true;
     }
 
-    public void markRefundedByProvider(String providerOrderId, String providerOrderIdentifier) {
+    /**
+     * Whether this payment has reached a state from which the provider should not
+     * move it back to PAID (refunded / failed / cancelled). Used to make webhook /
+     * polling status transitions idempotent and replay-safe.
+     */
+    public boolean isTerminal() {
+        return status == PaymentStatus.REFUNDED
+                || status == PaymentStatus.FAILED
+                || status == PaymentStatus.CANCELLED;
+    }
+
+    /**
+     * Provider real (cash) refund: marks the payment REFUNDED and records the
+     * provider order ids. <b>No Haru credit is issued</b> on this path — the money
+     * was returned by the payment provider (e.g. a dispute / chargeback), so the
+     * student is not also credited (that would double-refund).
+     *
+     * <p>State guard (defect #6): a payment already REFUNDED is left untouched and
+     * {@code false} is returned, so a re-delivered {@code order_refunded} webhook or
+     * a polling sync that re-observes a refunded order is a no-op. This also means a
+     * payment refunded as <em>credit</em> (admin approval) is never re-stamped as a
+     * provider refund. Returns {@code true} only when this call actually performed
+     * the REFUNDED transition.</p>
+     */
+    public boolean markRefundedByProvider(String providerOrderId, String providerOrderIdentifier) {
+        if (status == PaymentStatus.REFUNDED) {
+            return false;
+        }
         this.providerOrderId = providerOrderId;
         this.providerOrderIdentifier = providerOrderIdentifier;
         this.status = PaymentStatus.REFUNDED;
         touch();
+        return true;
     }
 
     /**
@@ -327,10 +369,59 @@ public class Payment {
      * Per-lesson tutor gross in USD (discounted / packCount), rounded HALF_UP to
      * 2 decimals. This is the gross a single completed/earned lesson contributes
      * to settlement.
+     *
+     * <p><b>Caution — rounding leak:</b> for packs whose discounted value is not
+     * evenly divisible the naive {@code discounted / packCount} per-unit times
+     * {@code packCount} does NOT equal {@code discounted} (e.g. 475 / 5 = 95.00 is
+     * exact, but a discounted of 158.32 / 5 = 31.66 * 5 = 158.30 leaks 0.02). For
+     * settlement / refund the {@link #perLessonSlots()} list below distributes the
+     * residual cents so the slot sum is exact. This single-value accessor is kept
+     * for display / legacy fallback only.</p>
      */
     public BigDecimal perLessonDiscountedAmount() {
         return getDiscountedAmount()
                 .divide(BigDecimal.valueOf(lessonPackCount), 2, RoundingMode.HALF_UP);
+    }
+
+    /**
+     * Expand this payment's tutor gross ({@code discounted}) into exactly
+     * {@code lessonPackCount} per-lesson "slots" whose sum equals {@code discounted}
+     * to the cent (largest-remainder allocation).
+     *
+     * <p>Each slot starts at {@code base = floor(discounted / packCount, 2)}; the
+     * residual cents {@code discounted - base * packCount} are distributed one cent
+     * at a time, front to back. This guarantees the settlement invariant
+     * {@code Σ(per-lesson gross) == payment.discounted} for every pack, eliminating
+     * the per-lesson rounding leak (defect #3) while keeping FIFO settlement
+     * (defect #2) attributable to the exact paying pack.</p>
+     */
+    public java.util.List<BigDecimal> perLessonSlots() {
+        return distributeSlots(getDiscountedAmount(), lessonPackCount);
+    }
+
+    /**
+     * Largest-remainder split of {@code total} (scale 2) into {@code units} parts
+     * that sum exactly to {@code total}. {@code base = floor(total/units, 2)}; the
+     * leftover cents are added 0.01 at a time to the leading slots. Shared by
+     * settlement (per booking) and refund (per unused unit) so both agree.
+     */
+    public static java.util.List<BigDecimal> distributeSlots(BigDecimal total, int units) {
+        if (units <= 0) {
+            return java.util.List.of();
+        }
+        BigDecimal scaledTotal = total.setScale(2, RoundingMode.HALF_UP);
+        BigDecimal base = scaledTotal.divide(BigDecimal.valueOf(units), 2, RoundingMode.FLOOR);
+        // residualCents = (scaledTotal - base*units) expressed in whole cents.
+        BigDecimal residual = scaledTotal.subtract(base.multiply(BigDecimal.valueOf(units)));
+        int residualCents = residual.movePointRight(2).setScale(0, RoundingMode.HALF_UP).intValueExact();
+        BigDecimal oneCent = new BigDecimal("0.01");
+
+        java.util.List<BigDecimal> slots = new java.util.ArrayList<>(units);
+        for (int i = 0; i < units; i++) {
+            BigDecimal slot = (i < residualCents) ? base.add(oneCent) : base;
+            slots.add(slot);
+        }
+        return slots;
     }
 
     public String getCurrency() {

@@ -33,6 +33,8 @@ public interface TutorEarningLedgerRepository extends JpaRepository<TutorEarning
 
     Optional<TutorEarningLedger> findFirstByBookingId(Long bookingId);
 
+    Optional<TutorEarningLedger> findFirstByBookingIdAndEntryType(Long bookingId, com.haru.settlement.domain.EarningEntryType entryType);
+
     List<TutorEarningLedger> findAllByTutorProfileIdOrderByIdDesc(Long tutorProfileId);
 
     boolean existsByIdempotencyKey(String idempotencyKey);

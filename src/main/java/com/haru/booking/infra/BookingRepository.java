@@ -118,4 +118,27 @@ public interface BookingRepository extends JpaRepository<Booking, Long> {
             order by b.updatedAt asc
             """)
     List<Booking> findLateCancelDueForSettlement();
+
+    /**
+     * Slot-consuming bookings for a (student, tutor, duration) tuple, ordered the
+     * way settlement consumes paid slots: {@code startAt} ascending, {@code id}
+     * ascending as a deterministic tie-break. A booking consumes a slot unless it
+     * was a NORMAL (in-window) cancel — late cancels, no-shows, completed and
+     * still-reserved lessons all hold a slot. This ordering defines the FIFO index
+     * a booking has against the student's paid pack slots (defect #2).
+     */
+    @Query("""
+            select b
+            from Booking b
+            where b.student.id = :studentId
+              and b.tutorProfile.id = :tutorProfileId
+              and b.lessonDurationMinutes = :lessonDurationMinutes
+              and (b.completionState is null or b.completionState <> com.haru.booking.domain.BookingCompletionState.CANCELLED_NORMAL)
+            order by b.startAt asc, b.id asc
+            """)
+    List<Booking> findSlotConsumingBookings(
+            @Param("studentId") Long studentId,
+            @Param("tutorProfileId") Long tutorProfileId,
+            @Param("lessonDurationMinutes") int lessonDurationMinutes
+    );
 }

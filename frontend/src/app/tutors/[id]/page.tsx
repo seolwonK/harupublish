@@ -91,14 +91,14 @@ function TutorProfilePageContent({ params }: { params: Promise<{ id: string }> }
     () => slots.filter((slot) => !selectedDate || formatDate(slot.startAt) === selectedDate),
     [selectedDate, slots]
   );
-  // 튜터 입력가(F)는 gross 단가. 학생 표시가 = F × (1 + studentFeeRate). MVP 단일가 "10% 포함".
-  const STUDENT_FEE_RATE = 0.1;
-  const tutorUnitPrice = tutor?.lessonPrice25Amount;
+  // 학생 표시가는 백엔드 studentPrice25Amount(= F × (1 + studentFeeRate), HALF_UP scale2)를 사용한다.
+  // 표시 전용 값이며 권위 가격은 checkout 응답. 백엔드 값이 없으면 튜터 단가로 폴백.
   const studentDisplayPrice = useMemo(() => {
-    const base = Number(tutorUnitPrice ?? 0);
-    if (!Number.isFinite(base) || base <= 0) return 0;
-    return Math.round(base * (1 + STUDENT_FEE_RATE) * 100) / 100;
-  }, [tutorUnitPrice]);
+    const student = Number(tutor?.studentPrice25Amount ?? NaN);
+    if (Number.isFinite(student) && student > 0) return student;
+    const base = Number(tutor?.lessonPrice25Amount ?? 0);
+    return Number.isFinite(base) && base > 0 ? base : 0;
+  }, [tutor?.studentPrice25Amount, tutor?.lessonPrice25Amount]);
 
   function loginRedirectTarget() {
     const slotSuffix = selectedSlotId ? `?slot=${selectedSlotId}` : "";
@@ -346,8 +346,8 @@ function TutorProfilePageContent({ params }: { params: Promise<{ id: string }> }
             <span>결제 금액 (25분 1회)</span>
             <strong>{money(studentDisplayPrice)}</strong>
           </div>
-          <p className="fee-caption" style={{ margin: "-6px 0 4px" }}>
-            <ShieldCheck size={13} /> 수수료 10% 포함 단일가 · 추가 결제 없음
+          <p className="fee-caption fee-caption-tight">
+            <ShieldCheck size={13} /> 수수료 포함 단일가 · 추가 결제 없음
           </p>
 
           <Button className="wide booking-primary-cta" onClick={() => void payAndBook()} disabled={actionLoading || !selectedSlotId || Boolean(selectedSlot?.booked) || createdBookingId !== null}>
