@@ -1,0 +1,7 @@
+# Keep shell scripts LF so Docker (Linux) builds work regardless of host OS / core.autocrlf.
+gradlew text eol=lf
+*.sh text eol=lf
+
+# Windows batch scripts stay CRLF.
+gradlew.bat text eol=crlf
+*.bat text eol=crlf
