@@ -424,6 +424,56 @@ export type ChatSocketEvent = {
   lastReadMessageId?: number;
 };
 
+// ── 개발자 도구 (dev tools) — 백엔드 haru.dev.enabled=true 일 때만 동작 ──
+
+export type DevTestAccount = {
+  userId: number;
+  email: string;
+  /** 평문 비밀번호 (테스트 로그인용, dev 전용). */
+  password: string;
+  name: string;
+  activeRole: Role;
+};
+
+export type DevCreatedSlot = {
+  scheduleSlotId: number;
+  startAt: string;
+  endAt: string;
+};
+
+export type DevCreatedLesson = {
+  bookingId: number;
+  scheduleSlotId: number;
+  startAt: string;
+  endAt: string;
+  status: string | null;
+};
+
+export type DevCreateTutorResult = {
+  tutorProfileId: number;
+  tutorAccount: DevTestAccount;
+  /** 예약 수업을 만든 경우 그 수업의 소유 학생 (없으면 null). */
+  studentAccount: DevTestAccount | null;
+  openSlots: DevCreatedSlot[];
+  bookedLessons: DevCreatedLesson[];
+};
+
+export type DevCreateTutorBody = {
+  name?: string;
+  email?: string;
+  password?: string;
+  category?: TutorCategory;
+  lessonPrice25Amount?: number;
+  lessonPrice50Amount?: number;
+  availableLanguages?: string[];
+  /** 공개(예약 가능) 슬롯 시작 시각들 (ISO instant). */
+  availabilitySlots?: string[];
+  /** 예약 수업 시작 시각들 (ISO instant). 지정 시 autoLessonCount보다 우선. */
+  bookedLessons?: string[];
+  /** bookedLessons 미지정 시 내일부터 30분 간격으로 자동 생성할 예약 수업 수. */
+  autoLessonCount?: number;
+};
+
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8080";
 const API_ORIGIN = new URL(API_BASE_URL).origin;
 /** STOMP WebSocket 엔드포인트 (백엔드 /ws-chat). */
@@ -790,6 +840,23 @@ export const haruApi = {
   },
   getChatUnreadCount(token: string) {
     return apiRequest<{ count: number }>("/api/chats/unread-count", { token });
+  },
+
+  // ── 개발자 도구 (dev tools) ──
+  devStatus() {
+    return apiRequest<{ enabled: boolean }>("/api/dev/status", { cache: "no-store" });
+  },
+  devCreateTutor(body: DevCreateTutorBody) {
+    return apiRequest<DevCreateTutorResult>("/api/dev/tutors", { method: "POST", body });
+  },
+  devCreateStudent(body: { name?: string; email?: string; password?: string }) {
+    return apiRequest<DevTestAccount>("/api/dev/students", { method: "POST", body });
+  },
+  devAddSlots(tutorProfileId: number, startAts: string[]) {
+    return apiRequest<DevCreatedSlot[]>(`/api/dev/tutors/${tutorProfileId}/slots`, { method: "POST", body: { startAts } });
+  },
+  devCreateBooking(body: { tutorProfileId: number; startAt: string; studentUserId?: number }) {
+    return apiRequest<DevCreatedLesson>("/api/dev/bookings", { method: "POST", body });
   }
 };
 
